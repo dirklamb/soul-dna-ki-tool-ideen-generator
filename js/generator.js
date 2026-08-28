@@ -57,6 +57,19 @@ const GENERIC_OFFER_WORDS = new Set([
   'begleitung','coach','berater','beraterin', 'seminar', 'kurs',
 ]);
 
+// Abstrakte Berater-/Coaching-Begriffe, die zwar in ganzen Sätzen völlig
+// normal sind, aber als NAMENS-Baustein ("Eigenverantwortungs-Aufbruch",
+// "Positionierungs-Vision") wie künstliche KI-Wortketten wirken. Werden nur
+// bei der Wortauswahl für Tool-Namen ausgeschlossen, nie in Zitaten ganzer
+// Sätze (dort bleiben es die echten Worte der Nutzer:innen).
+const ABSTRACT_NAMING_WORDS = new Set([
+  'eigenverantwortung', 'verantwortung', 'positionierung', 'transformation',
+  'potenzial', 'wertschöpfung', 'resonanz', 'wirkung', 'selbstverwirklichung',
+  'selbstoptimierung', 'achtsamkeit', 'motivation', 'wert', 'wunsch',
+]);
+
+const NAMING_EXCLUDE = new Set([...GENERIC_OFFER_WORDS, ...ABSTRACT_NAMING_WORDS]);
+
 // Zerlegt den Text in Wörter und merkt sich zusätzlich, welche Wörter durch
 // einen Bindestrich (statt eines Leerzeichens) mit dem vorherigen verbunden
 // waren. Bindestrich-Komposita wie "Führungskräfte-Coaching" sind IMMER
@@ -145,7 +158,7 @@ function collectNounCandidates(words) {
 }
 
 /** Größte, distinkteste "Subjekt"-Substantive + ein Emotionswort, falls vorhanden. */
-function extractSubjectAndEmotion(text) {
+function extractSubjectAndEmotion(text, exclude = null) {
   const words = tokenizeKeepCase(text);
   const emotion = words.find((w) => EMOTION_WORDS.has(w.toLowerCase()));
   const emotionKey = (emotion || '').toLowerCase();
@@ -155,6 +168,7 @@ function extractSubjectAndEmotion(text) {
   collectNounCandidates(words).forEach(({ word: w, index: i }) => {
     const key = w.toLowerCase();
     if (seen.has(key) || key === emotionKey) return;
+    if (exclude && exclude.has(key)) return;
     seen.add(key);
     candidates.push({ word: w, afterPreposition: isAfterPreposition(words, i) });
   });
@@ -223,6 +237,21 @@ function withFugenS(word) {
 }
 
 /**
+ * Kurzer Angebots-Name ohne Preis/Dauer, z. B. aus "8-Wochen-Eltern-
+ * Coaching für 1.500 €." wird "Eltern-Coaching" — für natürliche Fragen wie
+ * "Bin ich schon bereit für {offerLabel}?", die auf den echten Worten der
+ * Nutzerin beruhen statt auf einer extrahierten Kunstwort-Kombination.
+ */
+function offerLabel(offer) {
+  let s = (offer || '').trim();
+  s = s.replace(/,?\s*\d+[.,]?\d*\s*(Wochen?|Monate?|Tage?|Sitzungen?)\b.*$/i, '');
+  s = s.replace(/\bfür\s+[\d.,]+\s*€.*$/i, '');
+  s = s.replace(/^\d+[-\s]?(Wochen?|Monats?|Monate?)[-\s]?/i, '');
+  s = stripTrailingDot(s).trim();
+  return s || 'dieses Angebot';
+}
+
+/**
  * Kurzer, vollständiger erster Halbsatz (bis zum ersten Komma/Semikolon),
  * damit Zitate nicht mitten im Wort abgeschnitten werden. Fällt auf ein
  * wortgrenzen-sicheres truncate() zurück, wenn kein Komma in Reichweite ist.
@@ -267,9 +296,6 @@ function pick(arr, seedStr, salt = '') {
 
 const SUFFIX_DIAGNOSE = ['Kompass', 'Check', 'Spiegel', 'Barometer'];
 const SUFFIX_SIMULATOR = ['Zukunftsbild', 'Zielbild', 'Aufbruch', 'Vision'];
-// "Potenzial-Check" bewusst nicht enthalten: klingt zu sehr nach
-// Business-/Sales-Jargon und passt nicht in jede Nische (z. B. Eltern-Coaching).
-const SUFFIX_MATCHER = ['Bereitschafts-Check', 'Fit-Check'];
 
 const FALSE_ASSUMPTIONS = ['unmotiviert', 'schwierig', 'faul', 'desinteressiert', 'stur'];
 const WRONG_REFLEXES = ['mehr Druck', 'mehr Kontrolle', 'mehr Ermahnungen', 'noch mehr Erklärungen', 'noch mehr Disziplin'];
@@ -314,18 +340,18 @@ function buildContext(raw) {
   const soulClean = soul ? stripLabelPrefix(soul) : '';
   const futureClean = future ? stripLabelPrefix(future) : '';
 
-  const problemEx = extractSubjectAndEmotion(problem);
-  const dreamEx = extractSubjectAndEmotion(dream);
-  const targetEx = extractSubjectAndEmotion(target);
-  const expertiseTop = extractTopWords(expertise, 2);
+  const problemEx = extractSubjectAndEmotion(problem, ABSTRACT_NAMING_WORDS);
+  const dreamEx = extractSubjectAndEmotion(dream, ABSTRACT_NAMING_WORDS);
+  const targetEx = extractSubjectAndEmotion(target, ABSTRACT_NAMING_WORDS);
+  const expertiseTop = extractTopWords(expertise, 2, ABSTRACT_NAMING_WORDS);
   const soulTop = soulClean ? extractTopWords(soulClean, 2, META_LABEL_WORDS) : [];
   const futureTop = futureClean ? extractTopWords(futureClean, 2, META_LABEL_WORDS) : [];
-  const nicheTop = extractTopWords(niche, 2, GENERIC_OFFER_WORDS);
+  const nicheTop = extractTopWords(niche, 2, NAMING_EXCLUDE);
 
-  const subjectWord = problemEx.subject || targetEx.subject || extractTopWords(niche, 1)[0] || 'Situation';
+  const subjectWord = problemEx.subject || targetEx.subject || extractTopWords(niche, 1, ABSTRACT_NAMING_WORDS)[0] || 'Situation';
   const emotionWord = problemEx.emotion || null;
   const secondaryWord = emotionWord || problemEx.secondary || targetEx.subject || 'Muster';
-  const dreamWord = dreamEx.subject || dreamEx.emotion || extractTopWords(dream, 1)[0] || 'Ziel';
+  const dreamWord = dreamEx.subject || dreamEx.emotion || extractTopWords(dream, 1, ABSTRACT_NAMING_WORDS)[0] || 'Ziel';
   const audienceWord = nicheTop[0] || subjectWord;
   // Eigene Anker-Wörter für Zielgruppe & Expertise, damit nicht alle 5 Ideen
   // denselben Namensbestandteil (meist das Problem-Subjekt) teilen.
@@ -393,17 +419,19 @@ function mainCauseExplanation(ctx, archKey) {
 // Wer ist von dem Muster konkret betroffen? Der WOW-Moment muss wie ein
 // echter innerer Gedanke der Kundin klingen ("mein Kind", "mein
 // Mitarbeiter" …) statt eines unpersönlichen "jemand".
+// nom = Nominativ (Subjekt, z. B. im WOW-Moment "mein Kind ist …"),
+// acc = Akkusativ (Objekt, z. B. "Was bremst meinen Mitarbeiter wirklich?").
 const PERSON_PATTERNS = [
-  { test: /\bkind(er)?\b|\bkids\b|\bschüler(in)?\b|\bteenager\b/, phrase: 'mein Kind' },
-  { test: /\bmitarbeiter(in)?\b|\bteam(mitglied)?\b|\bangestellte[nr]?\b/, phrase: 'mein Mitarbeiter' },
-  { test: /\bpartner(in)?\b|\bbeziehung\b|\bpaar(e)?\b|\behe\b/, phrase: 'mein Partner' },
+  { test: /\bkind(er)?\b|\bkids\b|\bschüler(in)?\b|\bteenager\b/, nom: 'mein Kind', acc: 'mein Kind' },
+  { test: /\bmitarbeiter(in)?\b|\bteam(mitglied)?\b|\bangestellte[nr]?\b/, nom: 'mein Mitarbeiter', acc: 'meinen Mitarbeiter' },
+  { test: /\bpartner(in)?\b|\bbeziehung\b|\bpaar(e)?\b|\behe\b/, nom: 'mein Partner', acc: 'meinen Partner' },
 ];
 
 function personReference(niche, target, problem, dream) {
   const text = `${niche} ${target} ${problem} ${dream}`.toLowerCase();
   const match = PERSON_PATTERNS.find((p) => p.test.test(text));
-  if (match) return { phrase: match.phrase, copula: 'ist' };
-  return { phrase: 'ich', copula: 'bin' };
+  if (match) return { phrase: match.nom, acc: match.acc, copula: 'ist' };
+  return { phrase: 'ich', acc: 'mich', copula: 'bin' };
 }
 
 function wowMoment(ctx, salt, deeperCauseOverride) {
@@ -523,8 +551,10 @@ function ideaDiagnose(ctx) {
 }
 
 function ideaStrategie(ctx) {
-  const compound = `${ctx.expertiseWord}-Stillstand`;
-  const toolName = `Warum ${compound} einfach nicht aufhört?`;
+  // Personenbezogene Frage statt Kunstwort-Kompositum (z. B. "Verantwortungs-
+  // Stillstand") — "Was bremst meinen Mitarbeiter wirklich?" bleibt für JEDE
+  // Nische natürlich, weil kein extrahiertes Abstraktum eingebaut wird.
+  const toolName = `Was bremst ${ctx.personRef.acc} wirklich?`;
   const causeName = mainCauseName(ctx, 'strategie', ctx.dreamWord);
 
   const categoryReason = `Stark, weil nach der Ursachen-Klarheit die richtige nächste Entscheidung über Fortschritt oder Stillstand entscheidet.`;
@@ -627,9 +657,10 @@ function ideaTypanalyse(ctx) {
 }
 
 function ideaMatcher(ctx) {
-  const suffix = pick(SUFFIX_MATCHER, ctx.seedBase, 'match-suffix');
   const word = ctx.audienceWord;
-  const toolName = `${word}-${suffix}`;
+  // Personenbezogene Frage statt Kunstwort-Suffix ("…-Bereitschafts-Check").
+  // Nutzt den echten Angebots-Namen der Kundin, nie ein extrahiertes Abstraktum.
+  const toolName = `Bin ich schon bereit für ${offerLabel(ctx.offer)}?`;
   const causeName = mainCauseName(ctx, 'matcher', word);
 
   const categoryReason = `Stark, weil die entscheidende Frage hier nicht „was ist falsch“ ist, sondern „passt ${ctx.offerShort || 'dieses Angebot'} jetzt wirklich zu mir“ – ein Matcher macht genau diese Passung sichtbar.`;

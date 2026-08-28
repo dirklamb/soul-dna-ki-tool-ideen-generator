@@ -29,8 +29,8 @@ const CASES = [
     name: 'Führungskräfte-Coaching',
     input: {
       niche: 'Führungskräfte-Coaching',
-      target: 'Führungskräfte im Mittelstand, deren Mitarbeiter in wichtigen Gesprächen abblocken und Widerstand zeigen.',
-      problem: 'Mitarbeiter blocken in wichtigen Gesprächen ab, reagieren defensiv und verändern ihr Verhalten danach nicht.',
+      target: 'Führungskräfte im Mittelstand, deren Mitarbeiter kaum Eigenverantwortung übernehmen und in wichtigen Gesprächen abblocken.',
+      problem: 'Mitarbeiter übernehmen kaum Eigenverantwortung, warten auf Anweisungen und blocken in wichtigen Gesprächen ab.',
       dream: 'Mitarbeiter übernehmen mehr Eigenverantwortung und bringen sich offen ins Gespräch ein.',
       offer: '3-Monats-Führungs-Coaching für 3.500 €.',
       expertise: 'Ich erkenne die eigentliche Vertrauensblockade zwischen Führungskraft und Mitarbeiter und löse sie gezielt auf.',
@@ -57,6 +57,8 @@ const FUTURE = 'Mein Zukunfts-Profil: In 2 Jahren positioniere ich mich als füh
 const BANNED_JARGON = [
   'potenzialmatrix', 'wert-wunsch', 'transformationshebel', 'resonanzraum',
   'wirkungsarchitektur', 'matrix', 'navigator', 'synergie', 'paradigma',
+  'eigenverantwortungs-aufbruch', 'positionierungs-vision', 'verantwortungs-stillstand',
+  'wert-wunsch-spiegel', 'potenzial-check', 'bereitschafts-check',
 ];
 
 function assertNoJargon(text, label) {
@@ -204,4 +206,48 @@ test('WOW-Moment spricht aus Sicht einer konkreten, zur Nische passenden Person'
   // Ohne erkennbare dritte Person (z. B. Unternehmerin, die an sich selbst arbeitet) → erste Person.
   const selbst = generateIdeas({ ...base, niche: 'Souveränitäts-Coaching für Unternehmerinnen', target: 'Unternehmerinnen, die nach Entscheidungen nicht abschalten können.', problem: 'Ich kann nach Entscheidungen nicht abschalten.', dream: 'Ich entscheide souverän und schalte danach ab.' });
   assert.match(selbst.ideas[0].wowMoment, /„Oh – ich bin/);
+
+  // Der Strategie-Titel ("Was bremst X wirklich?") muss den Akkusativ korrekt verwenden.
+  assert.match(kind.ideas.find((i) => i.archKey === 'strategie').toolName, /^Was bremst mein Kind wirklich\?$/);
+  assert.match(mitarbeiter.ideas.find((i) => i.archKey === 'strategie').toolName, /^Was bremst meinen Mitarbeiter wirklich\?$/);
+  assert.match(partner.ideas.find((i) => i.archKey === 'strategie').toolName, /^Was bremst meinen Partner wirklich\?$/);
+  assert.match(selbst.ideas.find((i) => i.archKey === 'strategie').toolName, /^Was bremst mich wirklich\?$/);
+});
+
+test('Matcher-Titel nutzt den echten Angebotsnamen der Nutzerin ohne Preis/Dauer', () => {
+  const base = {
+    niche: 'Beziehungs-Coaching',
+    target: 'Paare, die seit Jahren immer wieder in denselben Streit geraten.',
+    problem: 'Kleine Meinungsverschiedenheiten eskalieren regelmäßig zu großem Streit.',
+    dream: 'Beide fühlen sich wieder gehört und finden schnell zueinander zurück.',
+    expertise: 'Ich erkenne das unsichtbare Beziehungsmuster hinter dem Streit und löse den Kreislauf gezielt auf.',
+  };
+  const { ideas } = generateIdeas({ ...base, offer: 'Paar-Intensiv-Coaching, 6 Wochen, 2.200 €.' });
+  const matcher = ideas.find((i) => i.archKey === 'matcher');
+  assert.equal(matcher.toolName, 'Bin ich schon bereit für Paar-Intensiv-Coaching?');
+});
+
+test('Abstrakte Coaching-Begriffe (Eigenverantwortung, Positionierung …) landen nicht in Tool-Namen', () => {
+  const { ideas } = generateIdeas({
+    niche: 'Führungskräfte-Coaching',
+    target: 'Führungskräfte im Mittelstand, deren Mitarbeiter kaum Eigenverantwortung übernehmen.',
+    problem: 'Mitarbeiter übernehmen kaum Eigenverantwortung und warten immer auf Anweisungen.',
+    dream: 'Das Team übernimmt mehr Eigenverantwortung und bringt eigene Lösungen ein.',
+    offer: '3-Monats-Führungs-Coaching für 3.500 €.',
+    expertise: 'Ich erkenne die eigentliche Verantwortungsblockade und löse sie gezielt auf.',
+  });
+  const allText = ideas.map((i) => `${i.toolName} ${i.mainCauseName}`).join(' | ');
+  assert.doesNotMatch(allText, /Eigenverantwortung/i, `Abstraktes Wort "Eigenverantwortung" darf nicht im Tool-Namen landen: ${allText}`);
+  assert.doesNotMatch(allText, /Verantwortungsblockade-Stillstand/i, allText);
+
+  const { ideas: ideas2 } = generateIdeas({
+    niche: 'Premium-Business-Coaching für Coaches, Berater, Heiler und Experten 45+',
+    target: 'Erfahrene Coaches und Berater 45+, deren Angebote gut sind, aber sich schlecht verkaufen.',
+    problem: 'Wunschkunden zögern lange und kaufen am Ende doch nicht, obwohl das Erstgespräch gut lief.',
+    dream: 'Premiumkunden erkennen den Wert sofort und entscheiden sich schnell und sicher.',
+    offer: 'Premium-Positionierungs-Mentoring, 10 Wochen, 5.900 €.',
+    expertise: 'Ich erkenne die eigentliche Positionierungslücke und schärfe das Angebot so, dass es sich von selbst verkauft.',
+  });
+  const allText2 = ideas2.map((i) => `${i.toolName} ${i.mainCauseName}`).join(' | ');
+  assert.doesNotMatch(allText2, /Positionierungslücke-Stillstand/i, allText2);
 });

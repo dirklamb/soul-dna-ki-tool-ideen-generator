@@ -45,22 +45,6 @@ const STEPS = [
 
 const REQUIRED_COUNT = STEPS.filter((s) => s.required).length;
 
-const CATEGORY_INFO = {
-  'Diagnose': 'Diagnose eignet sich hier besonders gut, weil Ihre Wunsch-Kunden zuerst eine ehrliche Standortbestimmung brauchen, bevor irgendein Rat wirklich greifen kann.',
-  'Strategie': 'Strategie passt hier, weil nach der Ursachen-Klarheit die richtige nächste Entscheidung über Fortschritt oder Stillstand entscheidet.',
-  'Simulator': 'Ein Simulator eignet sich hier besonders, weil das gewünschte Zukunftsbild noch abstrakt ist und erst erlebbar gemacht werden muss.',
-  'Analyse/Audit': 'Analyse/Audit passt hier, weil sich das Problem in ein wiederkehrendes, einordenbares Muster zerlegen lässt.',
-  'Matcher': 'Ein Matcher eignet sich hier besonders, weil die entscheidende Frage die persönliche Passung zum nächsten Schritt ist, nicht die Fehlersuche.',
-};
-
-const FORMAT_INFO = {
-  'Scorecard': 'Eine Scorecard macht in wenigen Minuten aus vielen kleinen Alltagsmomenten ein klares, persönliches Bild – ohne dass sich jemand bloßgestellt fühlt.',
-  'Entscheidungs-Hilfe': 'Eine Entscheidungs-Hilfe führt Schritt für Schritt zu einer klaren Empfehlung, statt mit noch mehr Optionen zu überfordern.',
-  'Roadmap-Canvas': 'Ein Roadmap-Canvas verbindet das Zukunftsbild mit dem heutigen Stand zu einem sichtbaren Weg – das macht Sehnsucht handhabbar statt diffus.',
-  'Typ-Analyse': 'Eine Typ-Analyse übersetzt ein komplexes Verhaltensmuster in ein einfaches, merkbares Ergebnis – persönlich und leicht teilbar.',
-  'Reifegrad-Check': 'Ein Reifegrad-Check zeigt ehrlich, wie nah jemand am nächsten sinnvollen Schritt bereits ist – das senkt die Hürde für eine Entscheidung spürbar.',
-};
-
 const state = {
   answers: {},
   stepIndex: 0,
@@ -243,17 +227,17 @@ document.addEventListener('click', () => {
   document.querySelectorAll('.info-badge.is-open').forEach((b) => b.classList.remove('is-open'));
 });
 
+// Label und Text stehen bewusst in EINEM Absatz hintereinander (kein
+// eigener Block für das Label) — bricht nur natürlich um, wenn der Platz
+// auf kleinen Displays nicht reicht.
 function field(labelText, valueText, extraClass) {
-  const wrap = document.createElement('div');
+  const wrap = document.createElement('p');
   wrap.className = `idea-field${extraClass ? ' ' + extraClass : ''}`;
-  const label = document.createElement('span');
-  label.className = 'field-label';
-  label.textContent = labelText;
-  const value = document.createElement('div');
-  value.className = 'field-value';
-  value.textContent = valueText;
+  const label = document.createElement('strong');
+  label.className = 'field-label-inline';
+  label.textContent = `${labelText}: `;
   wrap.appendChild(label);
-  wrap.appendChild(value);
+  wrap.appendChild(document.createTextNode(valueText));
   return wrap;
 }
 
@@ -276,15 +260,17 @@ function renderResults(ideas) {
       card.appendChild(badge);
     }
 
-    const rank = document.createElement('p');
-    rank.className = 'idea-rank';
-    rank.textContent = `#${idea.rank}`;
-    card.appendChild(rank);
-
+    const headerRow = document.createElement('div');
+    headerRow.className = 'idea-header-row';
+    const numberCircle = document.createElement('div');
+    numberCircle.className = 'idea-number';
+    numberCircle.textContent = String(idea.rank);
+    headerRow.appendChild(numberCircle);
     const name = document.createElement('h3');
     name.className = 'idea-name';
     name.textContent = idea.toolName;
-    card.appendChild(name);
+    headerRow.appendChild(name);
+    card.appendChild(headerRow);
 
     const badgeRow = document.createElement('div');
     badgeRow.className = 'badge-row';
@@ -299,58 +285,32 @@ function renderResults(ideas) {
 
     const wowBox = document.createElement('div');
     wowBox.className = 'wow-box';
-    const wowLabel = document.createElement('span');
-    wowLabel.className = 'field-label';
-    wowLabel.textContent = 'WOW-Moment / Erkenntnis';
-    const wowValue = document.createElement('div');
-    wowValue.className = 'field-value';
-    wowValue.textContent = idea.wowMoment;
-    wowBox.appendChild(wowLabel);
-    wowBox.appendChild(wowValue);
+    wowBox.appendChild(field('WOW-Moment / Erkenntnis', idea.wowMoment));
     card.appendChild(wowBox);
 
-    const resultNameLabel = document.createElement('span');
-    resultNameLabel.className = 'field-label';
-    resultNameLabel.textContent = 'Persönlicher Ergebnis-Name';
-    card.appendChild(resultNameLabel);
-    const resultTag = document.createElement('div');
-    resultTag.className = 'result-name-tag';
-    resultTag.textContent = `„${idea.resultName}“`;
-    card.appendChild(resultTag);
-
-    if (idea.isTop && idea.topReason) {
-      const box = document.createElement('div');
-      box.className = 'top-reason-box';
-      const label = document.createElement('span');
-      label.className = 'field-label';
-      label.textContent = 'Warum ich Ihnen genau diese Idee zuerst empfehlen würde';
-      const value = document.createElement('div');
-      value.className = 'field-value';
-      value.textContent = idea.topReason;
-      box.appendChild(label);
-      box.appendChild(value);
-      card.appendChild(box);
-    }
+    const whyStrongBox = document.createElement('div');
+    whyStrongBox.className = 'why-strong-box';
+    whyStrongBox.appendChild(field('Warum diese Idee stark ist', idea.whyStrong));
+    card.appendChild(whyStrongBox);
 
     // Details toggle
     const detailsPanel = document.createElement('div');
     detailsPanel.className = 'details-panel';
+    detailsPanel.appendChild(field('Hauptursache', idea.mainCause));
     detailsPanel.appendChild(field('Sofort-Empfehlung', idea.immediateAction));
     detailsPanel.appendChild(field('Was Sie nicht tun sollten', idea.avoidAction));
     detailsPanel.appendChild(field('Mini-Prognose', idea.prognosis));
     detailsPanel.appendChild(field('Nächster Schritt', idea.nextStep));
-    if (idea.positioning) {
-      detailsPanel.appendChild(field('Soul-DNA-Prägung', idea.positioning));
-    }
+    detailsPanel.appendChild(field(idea.soulFitLabel, idea.soulFit));
 
     const toggleBtn = document.createElement('button');
     toggleBtn.type = 'button';
     toggleBtn.className = 'details-toggle';
-    toggleBtn.innerHTML = 'Mehr Details <span class="chevron">▾</span>';
+    toggleBtn.innerHTML = 'Weitere Details <span class="chevron">▾</span>';
     toggleBtn.addEventListener('click', () => {
       const open = detailsPanel.classList.toggle('is-open');
       toggleBtn.classList.toggle('is-open', open);
-      toggleBtn.firstChild.textContent = open ? 'Weniger Details ' : 'Mehr Details ';
+      toggleBtn.firstChild.textContent = open ? 'Weniger Details ' : 'Weitere Details ';
     });
 
     card.appendChild(toggleBtn);
@@ -360,10 +320,7 @@ function renderResults(ideas) {
     const actions = document.createElement('div');
     actions.className = 'idea-actions';
 
-    const buildTimeTag = document.createElement('span');
-    buildTimeTag.className = 'build-time-tag';
-    buildTimeTag.textContent = `Bauzeit: ${idea.buildTime}`;
-    actions.appendChild(buildTimeTag);
+    actions.appendChild(field('Geschätzte Bauzeit', idea.buildTime, 'build-time-field'));
 
     const promptBtn = document.createElement('button');
     promptBtn.type = 'button';

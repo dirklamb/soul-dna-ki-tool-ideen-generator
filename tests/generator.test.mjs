@@ -4,6 +4,17 @@ import { generateIdeas } from '../js/generator.js';
 
 const CASES = [
   {
+    name: 'Premium-Business-Coaching',
+    input: {
+      niche: 'Premium-Business-Coaching für Coaches, Berater, Heiler und Experten 45+',
+      target: 'Erfahrene Coaches und Berater 45+, deren Angebote gut sind, aber sich schlecht verkaufen.',
+      problem: 'Wunschkunden zögern lange und kaufen am Ende doch nicht, obwohl das Erstgespräch gut lief.',
+      dream: 'Premiumkunden erkennen den Wert sofort und entscheiden sich schnell und sicher.',
+      offer: 'Premium-Positionierungs-Mentoring, 10 Wochen, 5.900 €.',
+      expertise: 'Ich erkenne die eigentliche Positionierungslücke und schärfe das Angebot so, dass es sich von selbst verkauft.',
+    },
+  },
+  {
     name: 'Eltern-/Kinder-Coaching',
     input: {
       niche: 'Eltern-/Kinder-Coaching',
@@ -36,24 +47,27 @@ const CASES = [
       expertise: 'Ich erkenne das unsichtbare Beziehungsmuster hinter dem Streit und löse den Kreislauf gezielt auf.',
     },
   },
-  {
-    name: 'Souveränitäts-Coaching für Unternehmerinnen 50+',
-    input: {
-      niche: 'Souveränitäts-Coaching für Unternehmerinnen 50+',
-      target: 'Unternehmerinnen 50+, die nach wichtigen Entscheidungen gedanklich nicht abschalten können.',
-      problem: 'Nach Entscheidungen kreisen die Gedanken stundenlang weiter und rauben Energie.',
-      dream: 'Souverän entscheiden und danach wirklich abschalten können.',
-      offer: 'Souveränitäts-Mentoring, 12 Wochen, 4.900 €.',
-      expertise: 'Ich erkenne das eigentliche Kontrollmuster hinter der Gedankenschleife und löse es gezielt auf.',
-    },
-  },
 ];
 
 const SOUL = 'Meine Soul-Autoritäts-Signatur: Ich bin die Klarheits-Bringerin, die mit ruhiger Tiefe unsichtbare Blockaden sichtbar macht.';
 const FUTURE = 'Mein Zukunfts-Profil: In 2 Jahren positioniere ich mich als führende Expertin für nachhaltige Souveränität mit einer eigenen Marke.';
 
+// Begriffe, die laut Anti-KI-Sprachcheck in Tool-Namen und sichtbaren Sätzen
+// nichts zu suchen haben.
+const BANNED_JARGON = [
+  'potenzialmatrix', 'wert-wunsch', 'transformationshebel', 'resonanzraum',
+  'wirkungsarchitektur', 'matrix', 'navigator', 'synergie', 'paradigma',
+];
+
+function assertNoJargon(text, label) {
+  const lower = text.toLowerCase();
+  for (const word of BANNED_JARGON) {
+    assert.ok(!lower.includes(word), `${label} enthält KI-Jargon "${word}": ${text}`);
+  }
+}
+
 for (const c of CASES) {
-  test(`${c.name} — Basisvariante liefert 5 valide, diverse Ideen`, () => {
+  test(`${c.name} — Basisvariante liefert 5 valide, diverse, verständliche Ideen`, () => {
     const { ideas } = generateIdeas(c.input);
     assert.equal(ideas.length, 5);
 
@@ -65,39 +79,51 @@ for (const c of CASES) {
     const names = new Set(ideas.map((i) => i.toolName));
     assert.equal(names.size, 5, 'Tool-Namen müssen sich unterscheiden');
 
-    const resultNames = new Set(ideas.map((i) => i.resultName));
-    assert.equal(resultNames.size, 5, `Ergebnis-Namen müssen sich unterscheiden: ${[...ideas.map((i) => i.resultName)]}`);
+    const causeNames = new Set(ideas.map((i) => i.mainCauseName));
+    assert.equal(causeNames.size, 5, `Hauptursache-Namen müssen sich unterscheiden: ${[...ideas.map((i) => i.mainCauseName)]}`);
 
     assert.equal(ideas[0].isTop, true);
-    assert.ok(ideas[0].topReason && ideas[0].topReason.length > 20);
-    assert.equal(ideas[0].stars, undefined); // rendering adds stars, not generator
+    assert.equal(ideas[1].isTop, false);
 
     for (const idea of ideas) {
-      for (const field of ['toolName', 'category', 'format', 'categoryReason', 'formatReason', 'benefit', 'inputDescription', 'result', 'acuteProblem', 'wowMoment', 'resultName', 'immediateAction', 'avoidAction', 'prognosis', 'nextStep', 'buildTime', 'buildPrompt']) {
+      for (const field of [
+        'toolName', 'category', 'format', 'categoryReason', 'formatReason', 'benefit',
+        'inputDescription', 'result', 'acuteProblem', 'wowMoment', 'whyStrong',
+        'mainCauseName', 'mainCauseExplanation', 'mainCause',
+        'immediateAction', 'avoidAction', 'prognosis', 'nextStep', 'buildTime', 'buildPrompt',
+        'soulFit', 'soulFitLabel',
+      ]) {
         assert.ok(idea[field] && idea[field].length > 0, `Feld ${field} fehlt bei ${idea.toolName}`);
       }
       assert.doesNotMatch(idea.result, /^(erste Einschätzung|mehr Klarheit|persönliches Ergebnis)\.?$/i);
+      assert.equal(idea.soulFitLabel, 'Expertise-Fit', 'Ohne Soul-DNA-Angaben muss der Fallback "Expertise-Fit" heißen');
+
+      // Tool-Name muss kurz und verständlich sein (max. ~8 "Wörter", auch bei Fragen-Namen).
+      const wordCount = idea.toolName.split(/\s+/).length;
+      assert.ok(wordCount <= 9, `Tool-Name zu lang/unverständlich: "${idea.toolName}"`);
+      assertNoJargon(idea.toolName, `Tool-Name (${idea.archKey})`);
+      assertNoJargon(idea.mainCauseName, `Hauptursache-Name (${idea.archKey})`);
     }
 
     const hasFutureLeaningIdea = ideas.some((i) => i.archKey === 'simulator');
     assert.ok(hasFutureLeaningIdea, 'Mindestens eine Idee muss auf Sehnsucht/Zukunft einzahlen');
   });
 
-  test(`${c.name} — Soul-DNA-Variante verändert die Ideen sichtbar`, () => {
+  test(`${c.name} — Soul-DNA-Variante verändert Top-Idee und Soul-DNA-Fit sichtbar`, () => {
     const base = generateIdeas(c.input);
     const withSoul = generateIdeas({ ...c.input, soul: SOUL, future: FUTURE });
 
-    let changedCount = 0;
+    // Top-Idee: Tool-Name und Hauptursache-Name müssen sich sichtbar ändern.
+    assert.notEqual(base.ideas[0].toolName, withSoul.ideas[0].toolName, 'Top-Tool-Name sollte sich durch Soul-DNA ändern');
+    assert.notEqual(base.ideas[0].mainCauseName, withSoul.ideas[0].mainCauseName, 'Hauptursache der Top-Idee sollte sich durch Soul-DNA ändern');
+    assert.match(withSoul.ideas[0].toolName, /Handschrift/);
+
+    // Für alle 5 Ideen muss der Soul-DNA-Fit-Block auf "Soul-DNA-Fit" umschalten und konkret bleiben.
     for (let i = 0; i < 5; i++) {
-      const a = base.ideas[i];
-      const b = withSoul.ideas[i];
-      if (a.toolName !== b.toolName || a.resultName !== b.resultName || a.categoryReason !== b.categoryReason || a.benefit !== b.benefit) {
-        changedCount++;
-      }
-      assert.ok(b.buildPrompt.includes('Soul-Autoritäts-Signatur'));
-      assert.ok(b.buildPrompt.includes('Zukunfts-Profil'));
+      assert.equal(withSoul.ideas[i].soulFitLabel, 'Soul-DNA-Fit');
+      assert.notEqual(base.ideas[i].soulFit, withSoul.ideas[i].soulFit);
+      assert.ok(withSoul.ideas[i].buildPrompt.includes('Soul-Autoritäts-Signatur'));
+      assert.ok(withSoul.ideas[i].buildPrompt.includes('Zukunfts-Profil'));
     }
-    assert.ok(changedCount >= 3, `Zu wenige Ideen verändern sich durch Soul-DNA (${changedCount}/5)`);
-    assert.ok(withSoul.ideas[0].toolName.includes('Signature Edition'), 'Top-Idee sollte Signatur-Prägung im Namen tragen');
   });
 }

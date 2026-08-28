@@ -6,7 +6,8 @@
  * angesprochen — die gesamte "Intelligenz" steckt in dieser Datei als
  * deterministisches, hochwertiges Template- und Extraktions-System, das die
  * eigenen Formulierungen der Nutzer:innen aufgreift statt generische Floskeln
- * zu produzieren.
+ * zu produzieren. Tool-Namen bleiben bewusst einfache, sofort verständliche
+ * Wörter oder Kunden-Fragen — keine abstrakten Kunstbegriffe.
  */
 
 // ---------------------------------------------------------------------------
@@ -28,6 +29,16 @@ const STOPWORDS = new Set([
   'diese','dieser','dieses','diesem','diesen','jede','jeder','jedes','alle','allen',
   'kein','keine','keiner','keinem','keinen','so','denn','damit','dann','dort','hier',
   'menschen','kunden','kundinnen','personen','leute','klienten','klientinnen',
+  // Häufige Adjektive/Pronomen, die nur am Satzanfang großgeschrieben sind
+  // und sonst niemals als eigenständiges Substantiv taugen.
+  'kleine','kleiner','kleines','kleinen','große','großer','großes','großen',
+  'beide','beides','beiden','viele','vieles','wenige','weniges',
+  'manche','manches','einige','einiges','andere','anderer','anderes','anderen',
+  'ganze','ganzer','ganzes','ganzen','neue','neuer','neues','neuen',
+  'alte','alter','altes','alten','gute','guter','gutes','guten',
+  'schlechte','schlechter','schlechtes','schlechten',
+  'erste','erster','erstes','ersten','letzte','letzter','letztes','letzten',
+  'solche','solcher','solches','solchen',
 ]);
 
 const EMOTION_WORDS = new Set([
@@ -39,6 +50,13 @@ const EMOTION_WORDS = new Set([
   'überreizung','reizbarkeit','antriebslosigkeit','perfektionismus','kontrollzwang',
 ]);
 
+// Generische Angebots-/Format-Wörter, die als Tool-Namen-Bestandteil zu
+// unspezifisch wären (z. B. "Coaching-Potenzial-Check" statt "Eltern-Potenzial-Check").
+const GENERIC_OFFER_WORDS = new Set([
+  'coaching','beratung','training','programm','mentoring','workshop',
+  'begleitung','coach','berater','beraterin', 'seminar', 'kurs',
+]);
+
 function tokenizeKeepCase(text) {
   return (text || '')
     .replace(/[.,;:!?()„“"'\-–—/]/g, ' ')
@@ -47,11 +65,20 @@ function tokenizeKeepCase(text) {
     .filter(Boolean);
 }
 
+// Kurze, generische "Füllwörter", die zwar großgeschrieben sind, aber kein
+// eigenes Thema tragen (z. B. "am Ende", "im Fall", "auf diese Weise") und
+// daher als Tool-Namen-Bestandteil ungeeignet wären.
+const FILLER_NOUNS = new Set([
+  'ende', 'anfang', 'beginn', 'mal', 'seite', 'punkt', 'sache', 'ding',
+  'moment', 'fall', 'weise', 'art', 'teil', 'stelle', 'stück', 'zeit',
+]);
+
 function isCapitalizedNoun(word) {
   if (word.length < 4) return false;
   const first = word.charAt(0);
   if (first !== first.toUpperCase() || first === first.toLowerCase()) return false;
   if (STOPWORDS.has(word.toLowerCase())) return false;
+  if (FILLER_NOUNS.has(word.toLowerCase())) return false;
   if (/^\d/.test(word)) return false;
   return true;
 }
@@ -73,7 +100,12 @@ function extractSubjectAndEmotion(text) {
   }
 
   const subject = distinctNouns[0] || null;
-  const secondaryNoun = distinctNouns.find((w) => w !== subject) || null;
+  // Für das zweite Wort lieber das längste (spezifischste) verbleibende
+  // Substantiv nehmen statt einfach das nächste im Text — das vermeidet
+  // zufällige Nebenwörter als Namensbestandteil.
+  const secondaryNoun = [...distinctNouns]
+    .filter((w) => w !== subject)
+    .sort((a, b) => b.length - a.length)[0] || null;
 
   return {
     subject,
@@ -144,14 +176,14 @@ function pick(arr, seedStr, salt = '') {
 }
 
 // ---------------------------------------------------------------------------
-// Wortbänke
+// Wortbänke — ausschließlich einfache, alltagssprachliche Wörter.
 // ---------------------------------------------------------------------------
 
-const SUFFIX_DIAGNOSE = ['Kompass', 'Code', 'Spiegel', 'Barometer'];
-const SUFFIX_STRATEGIE = ['Wegweiser', 'Weiche', 'Fahrplan', 'Kurswechsel'];
-const SUFFIX_SIMULATOR = ['Zukunftsbild', 'Aufbruch', 'Zielbild', 'Wandel-Weg'];
-const SUFFIX_TYPANALYSE = ['Typ', 'Reaktions-Typ', 'Muster-Typ', 'Profil'];
-const SUFFIX_MATCHER = ['Fit-Check', 'Bereitschafts-Check', 'Passungs-Check', 'Match'];
+const SUFFIX_DIAGNOSE = ['Kompass', 'Check', 'Spiegel', 'Barometer'];
+const SUFFIX_STRATEGIE = ['Wegweiser', 'Fahrplan', 'Kurswechsel'];
+const SUFFIX_SIMULATOR = ['Zukunftsbild', 'Zielbild', 'Aufbruch', 'Vision'];
+const SUFFIX_TYPANALYSE = ['Check', 'Analyse'];
+const SUFFIX_MATCHER = ['Potenzial-Check', 'Bereitschafts-Check', 'Fit-Check'];
 
 const FALSE_ASSUMPTIONS = ['unmotiviert', 'schwierig', 'nicht willens', 'desinteressiert', 'stur'];
 const WRONG_REFLEXES = ['mehr Druck', 'mehr Kontrolle', 'mehr Ermahnungen', 'noch mehr Erklärungen', 'noch mehr Disziplin'];
@@ -159,7 +191,7 @@ const WRONG_REFLEXES = ['mehr Druck', 'mehr Kontrolle', 'mehr Ermahnungen', 'noc
 const RESULT_ADJECTIVES = ['stille', 'unsichtbare', 'heimliche', 'verborgene', 'eigentliche'];
 
 // Jedes Archetyp bekommt sein eigenes festes Muster-Substantiv, damit sich
-// Ergebnis-Namen zwischen den 5 Ideen niemals zufällig überschneiden können.
+// Hauptursache-Namen zwischen den 5 Ideen niemals zufällig überschneiden können.
 const PAIN_PATTERN_BY_ARCH = {
   diagnose: { art: 'Die', noun: 'Falle' },
   typanalyse: { art: 'Der', noun: 'Reflex' },
@@ -168,6 +200,16 @@ const PAIN_PATTERN_BY_ARCH = {
 };
 
 const FUTURE_ADJECTIVES = ['klare', 'greifbare', 'persönliche', 'naheliegende'];
+
+// "Warum diese Idee stark ist" — je Archetyp eine feste, aber idee-spezifisch
+// eingesetzte Begründung (siehe buildWhyStrong).
+const ARCH_STRENGTH_LABEL = {
+  diagnose: 'macht die konkrete Ursache hinter dem akuten Problem sichtbar',
+  typanalyse: 'bringt ein wiederkehrendes Muster ans Licht, das bisher niemand richtig benennen konnte',
+  simulator: 'macht ein fernes Zukunftsbild schon heute greifbar',
+  matcher: 'schafft Klarheit genau in dem Moment, in dem eine Entscheidung ansteht',
+  strategie: 'nimmt die Überforderung durch zu viele Optionen und liefert eine einzige klare Empfehlung',
+};
 
 // ---------------------------------------------------------------------------
 // Kontext-Aufbau
@@ -192,17 +234,19 @@ function buildContext(raw) {
   const expertiseTop = extractTopWords(expertise, 2);
   const soulTop = soulClean ? extractTopWords(soulClean, 2, META_LABEL_WORDS) : [];
   const futureTop = futureClean ? extractTopWords(futureClean, 2, META_LABEL_WORDS) : [];
+  const nicheTop = extractTopWords(niche, 2, GENERIC_OFFER_WORDS);
 
   const subjectWord = problemEx.subject || targetEx.subject || extractTopWords(niche, 1)[0] || 'Situation';
   const emotionWord = problemEx.emotion || null;
   const secondaryWord = emotionWord || problemEx.secondary || targetEx.subject || 'Muster';
   const dreamWord = dreamEx.subject || dreamEx.emotion || extractTopWords(dream, 1)[0] || 'Ziel';
+  const audienceWord = nicheTop[0] || subjectWord;
 
   return {
     niche, target, problem, dream, offer, expertise, soul, future,
     soulClean, futureClean,
-    subjectWord, emotionWord, secondaryWord, dreamWord,
-    expertiseTop, soulTop, futureTop,
+    subjectWord, emotionWord, secondaryWord, dreamWord, audienceWord,
+    expertiseTop, soulTop, futureTop, nicheTop,
     hasSoul: soul.length > 0,
     hasFuture: future.length > 0,
     targetShort: stripTrailingDot(truncate(target, 70)),
@@ -214,17 +258,39 @@ function buildContext(raw) {
   };
 }
 
-function resultName(ctx, archKey, wordOverride) {
+// ---------------------------------------------------------------------------
+// Hauptursache: quoted, menschlicher Name + 1 Satz konkrete Erklärung.
+// ---------------------------------------------------------------------------
+
+function mainCauseName(ctx, archKey, wordOverride) {
   const adj = pick(RESULT_ADJECTIVES, ctx.seedBase, archKey + 'adj');
   const pattern = PAIN_PATTERN_BY_ARCH[archKey];
   const word = wordOverride || ctx.secondaryWord || ctx.subjectWord;
   return `${pattern.art} ${adj} ${word}-${pattern.noun}`;
 }
 
-function resultNameFuture(ctx, wordOverride) {
+function mainCauseNameFuture(ctx, wordOverride) {
   const adj = pick(FUTURE_ADJECTIVES, ctx.seedBase, 'sim-adj');
   const word = wordOverride || ctx.dreamWord;
   return `Das ${adj} ${word}-Zukunftsbild`;
+}
+
+function mainCauseExplanation(ctx, archKey) {
+  const methodClause = lowerFirst(stripTrailingDot(ctx.expertise));
+  switch (archKey) {
+    case 'diagnose':
+      return `Bei „${ctx.problemShort}“ zeigt sich immer wieder dasselbe Muster: ${methodClause}.`;
+    case 'typanalyse':
+      return `Immer wenn es kritisch wird, greift dasselbe Muster: ${methodClause}.`;
+    case 'simulator':
+      return `Der Weg zu „${ctx.dreamShort}“ stockt meist an derselben Stelle: ${methodClause}.`;
+    case 'matcher':
+      return `Das Zögern vor „${ctx.offerShort || 'dem nächsten Schritt'}“ hat fast immer denselben Grund: ${methodClause}.`;
+    case 'strategie':
+      return `Der Stillstand entsteht fast immer auf dieselbe Weise: ${methodClause}.`;
+    default:
+      return methodClause;
+  }
 }
 
 function wowMoment(ctx, salt, deeperCauseOverride) {
@@ -237,6 +303,23 @@ function wowMoment(ctx, salt, deeperCauseOverride) {
   return `„Oh – das liegt also gar nicht daran, dass hier einfach jemand ${assumption} ist!“ Dahinter steckt eher ${deeperCause}, und ${reflex} verstärkt genau dieses Muster.`;
 }
 
+function buildWhyStrong(ctx, archKey) {
+  switch (archKey) {
+    case 'diagnose':
+      return `Sie beantwortet die Frage, die hinter „${ctx.problemShort}“ steckt, und macht sofort Lust auf den nächsten konkreten Schritt.`;
+    case 'typanalyse':
+      return `Sie macht ein Muster sichtbar, das hinter „${ctx.problemShort}“ steckt und bisher niemand richtig benennen konnte.`;
+    case 'simulator':
+      return `Sie macht „${ctx.dreamShort}“ schon heute greifbar und zeigt sofort einen ersten machbaren Schritt dorthin.`;
+    case 'matcher':
+      return `Sie beantwortet die eine Frage, die vor „${ctx.offerShort || 'einer Entscheidung'}“ im Kopf steht: Passt das jetzt wirklich zu mir?`;
+    case 'strategie':
+      return `Sie nimmt die Überforderung durch zu viele Optionen und liefert eine einzige klare Empfehlung auf dem Weg zu „${ctx.dreamShort}“.`;
+    default:
+      return ARCH_STRENGTH_LABEL[archKey] || '';
+  }
+}
+
 function nextStepFor(archKey, ctx) {
   const offer = ctx.offerShort || 'Ihr Angebot';
   switch (archKey) {
@@ -247,12 +330,30 @@ function nextStepFor(archKey, ctx) {
     case 'simulator':
       return `Einladung zu einem Live-Workshop/Webinar, in dem der Weg zum Zielbild konkret wird → Übergang zu ${offer}.`;
     case 'typanalyse':
-      return `Vertiefender Check zum eigenen Typ per E-Mail → persönlicher Termin-Kalender für ${offer}.`;
+      return `Vertiefender Check zum eigenen Muster per E-Mail → persönlicher Termin-Kalender für ${offer}.`;
     case 'matcher':
       return `Direkter Sprung auf die Angebotsseite von ${offer} mit persönlicher Terminbuchung.`;
     default:
       return `Persönlicher Termin-Kalender für ${offer}.`;
   }
+}
+
+function buildSoulFit(ctx, archKey) {
+  const strength = ARCH_STRENGTH_LABEL[archKey] || 'trifft genau den Kern Ihrer Zielgruppe';
+  const strengthSentence = `Diese Idee ${strength}`;
+
+  if (ctx.hasSoul || ctx.hasFuture) {
+    const source = ctx.hasSoul ? ctx.soulClean : ctx.futureClean;
+    return {
+      label: 'Soul-DNA-Fit',
+      text: `${strengthSentence} – genau das spiegelt sich in „${truncate(source, 100)}“ wider.`,
+    };
+  }
+
+  return {
+    label: 'Expertise-Fit',
+    text: `${strengthSentence} – genau das ist der Kern Ihrer Methode: ${lowerFirst(stripTrailingDot(ctx.expertise))}.`,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -266,13 +367,13 @@ function ideaDiagnose(ctx) {
   const toolName = secondary ? `${primary}-${secondary}-${suffix}` : `${primary}-${suffix}`;
   const dims = [ctx.emotionWord, 'Auslöser-Momente', 'typische Reaktion', 'Erwartungsdruck', 'Energie im Alltag'].filter(Boolean);
   const n = 6;
-  const rName = resultName(ctx, 'diagnose', secondary || primary);
+  const causeName = mainCauseName(ctx, 'diagnose', secondary || primary);
 
-  const categoryReason = `Bei „${ctx.problemShort}“ hilft zuerst eine ehrliche Standortbestimmung, keine fertige Lösung – genau das leistet eine Diagnose, bevor irgendein Rat greifen kann.`;
-  const formatReason = `Eine Scorecard macht in wenigen Minuten aus vielen kleinen Alltagsmomenten ein klares, persönliches Bild – ohne dass sich jemand bloßgestellt fühlt.`;
+  const categoryReason = `Stark, weil das Tool nicht nur Tipps gibt, sondern die konkrete Ursache hinter „${ctx.problemShort}“ sichtbar macht.`;
+  const formatReason = `Stark, weil Ihre Wunsch-Kundin in wenigen Minuten ein persönliches Ergebnis mit klarer Einordnung bekommt – ohne sich bloßgestellt zu fühlen.`;
   const benefit = `Ihre Wunsch-Kundin erkennt in wenigen Minuten, warum „${ctx.problemShort}“ wirklich passiert – und was sie als Erstes anders machen kann.`;
   const inputDescription = `${n} Fragen zu ${dims.slice(0, 4).join(', ')} und ${dims[4] || 'Kommunikation im Alltag'}.`;
-  const result = `Hauptursache erkennen + persönliche Einordnung als „${rName}“ + ein konkreter erster Veränderungs-Schritt.`;
+  const result = `Hauptursache erkennen + persönliche Einordnung + ein konkreter erster Veränderungs-Schritt.`;
   const acuteProblem = `${capitalize(ctx.problemShort)}.`;
   const wow = wowMoment(ctx, 'diagnose');
   const immediateAction = `Die erkannte Ursache offen ansprechen und gemeinsam einen einzigen, ganz kleinen ersten Schritt festlegen – nicht die ganze Lösung auf einmal.`;
@@ -284,7 +385,10 @@ function ideaDiagnose(ctx) {
     category: 'Diagnose',
     format: 'Scorecard',
     toolName, categoryReason, formatReason, benefit, inputDescription, result,
-    acuteProblem, wowMoment: wow, resultName: rName, immediateAction, avoidAction, prognosis,
+    acuteProblem, wowMoment: wow,
+    mainCauseName: causeName, mainCauseExplanation: mainCauseExplanation(ctx, 'diagnose'),
+    whyStrong: buildWhyStrong(ctx, 'diagnose'),
+    immediateAction, avoidAction, prognosis,
     nextStep: nextStepFor('diagnose', ctx),
     buildTime: 'ca. 30–45 Min.',
   };
@@ -292,17 +396,17 @@ function ideaDiagnose(ctx) {
 
 function ideaStrategie(ctx) {
   const suffix = pick(SUFFIX_STRATEGIE, ctx.seedBase, 'strategie-suffix');
-  const word = ctx.dreamWord && ctx.dreamWord.toLowerCase() !== ctx.subjectWord.toLowerCase() ? ctx.dreamWord : ctx.subjectWord;
-  const toolName = `${word}-${suffix}`;
-  const rName = resultName(ctx, 'strategie', ctx.dreamWord);
+  const compound = `${ctx.subjectWord}-Stillstand`;
+  const toolName = `Warum ${compound} einfach nicht aufhört?-${suffix}`;
+  const causeName = mainCauseName(ctx, 'strategie', ctx.dreamWord);
 
-  const categoryReason = `Sobald der Ist-Zustand klar ist, entscheidet die richtige nächste Handlung über Fortschritt oder Stillstand – eine Strategie-Idee macht genau diese Entscheidung greifbar.`;
-  const formatReason = `Eine Entscheidungs-Hilfe führt Schritt für Schritt zu einer klaren Empfehlung, statt mit noch mehr Optionen zu überfordern.`;
+  const categoryReason = `Stark, weil nach der Ursachen-Klarheit die richtige nächste Entscheidung über Fortschritt oder Stillstand entscheidet.`;
+  const formatReason = `Stark, weil eine Entscheidungs-Hilfe Schritt für Schritt zu einer klaren Empfehlung führt, statt mit noch mehr Optionen zu überfordern.`;
   const benefit = `Ihre Wunsch-Kundin bekommt eine klare, auf ihre Situation zugeschnittene Empfehlung, welcher Weg jetzt der richtige ist – statt sich zwischen zu vielen Optionen zu verlieren.`;
   const inputDescription = `5 Fragen zu aktueller Vorgehensweise, Zeitdruck, bisherigen Versuchen, Unterstützung im Umfeld und gewünschtem Tempo.`;
-  const result = `Klare Weg-Empfehlung + persönliche Einordnung als „${rName}“ + ein konkreter nächster Meilenstein.`;
+  const result = `Klare Weg-Empfehlung + persönliche Einordnung der Situation + ein konkreter nächster Meilenstein.`;
   const acuteProblem = `Viele in dieser Situation wissen nicht mehr, was als Nächstes wirklich sinnvoll ist, und verlieren sich in Grübeln statt zu handeln.`;
-  const wow = wowMoment(ctx, 'strategie', ctx.expertise ? `nicht fehlende Motivation, sondern das Fehlen eines klaren nächsten Schritts – genau hier setzt „${ctx.expertise ? lowerFirst(stripTrailingDot(ctx.expertise)) : 'Ihre Methode'}“ an` : null);
+  const wow = wowMoment(ctx, 'strategie', ctx.expertise ? `nicht fehlende Motivation, sondern das Fehlen eines klaren nächsten Schritts – genau hier setzt Ihre Methode an: ${lowerFirst(stripTrailingDot(ctx.expertise))}` : null);
   const immediateAction = `Den einen nächsten Schritt festlegen und terminieren, statt gleichzeitig an mehreren Fronten etwas zu ändern.`;
   const avoidAction = `Nicht parallel drei verschiedene Ansätze gleichzeitig ausprobieren – das erzeugt zusätzliche Verunsicherung.`;
   const prognosis = `Ohne klare Entscheidung bleibt das Gefühl von Stillstand vermutlich bestehen. Mit einem klaren nächsten Schritt entsteht spürbar schneller Bewegung Richtung „${ctx.dreamShort}“.`;
@@ -312,7 +416,10 @@ function ideaStrategie(ctx) {
     category: 'Strategie',
     format: 'Entscheidungs-Hilfe',
     toolName, categoryReason, formatReason, benefit, inputDescription, result,
-    acuteProblem, wowMoment: wow, resultName: rName, immediateAction, avoidAction, prognosis,
+    acuteProblem, wowMoment: wow,
+    mainCauseName: causeName, mainCauseExplanation: mainCauseExplanation(ctx, 'strategie'),
+    whyStrong: buildWhyStrong(ctx, 'strategie'),
+    immediateAction, avoidAction, prognosis,
     nextStep: nextStepFor('strategie', ctx),
     buildTime: 'ca. 30–45 Min.',
   };
@@ -323,23 +430,23 @@ function ideaSimulator(ctx) {
   let word = ctx.dreamWord;
   let categoryReason;
   let toolName;
-  let rName;
+  let causeName;
 
   if (ctx.hasFuture && ctx.futureTop[0]) {
     word = ctx.futureTop[0];
     toolName = `${word}-${suffix}`;
-    categoryReason = `Ihr Zukunfts-Profil beschreibt bereits, wohin die Reise geht – ein Simulator macht dieses Zielbild schon heute erlebbar, statt es abstrakt zu lassen.`;
-    rName = resultNameFuture(ctx, word);
+    categoryReason = `Stark, weil Ihr Zukunfts-Profil bereits beschreibt, wohin die Reise geht – ein Simulator macht dieses Zielbild schon heute erlebbar.`;
+    causeName = mainCauseNameFuture(ctx, word);
   } else {
     toolName = `${word}-${suffix}`;
-    categoryReason = `Ihre Wunsch-Kunden können sich „${ctx.dreamShort}“ oft noch nicht wirklich vorstellen – ein Simulator macht dieses Zukunftsbild schon heute spürbar.`;
-    rName = resultNameFuture(ctx, word);
+    categoryReason = `Stark, weil Ihre Wunsch-Kunden sich „${ctx.dreamShort}“ oft noch nicht wirklich vorstellen können – ein Simulator macht dieses Zukunftsbild schon heute spürbar.`;
+    causeName = mainCauseNameFuture(ctx, word);
   }
 
-  const formatReason = `Ein Roadmap-Canvas verbindet das Zukunftsbild mit dem heutigen Stand zu einem sichtbaren Weg – das macht Sehnsucht handhabbar statt diffus.`;
+  const formatReason = `Stark, weil ein Roadmap-Canvas das Zukunftsbild mit dem heutigen Stand zu einem sichtbaren Weg verbindet – das macht Sehnsucht handhabbar statt diffus.`;
   const benefit = `Ihre Wunsch-Kundin sieht schwarz auf weiß, wie „${ctx.dreamShort}“ für sie konkret aussehen könnte – und welcher Weg dorthin realistisch ist.`;
   const inputDescription = `5 Fragen zu Wunschbild in einigen Monaten, größter Sehnsucht, bisherigen Hindernissen und vorhandenen Ressourcen.`;
-  const result = `Persönliches Zukunftsbild + Einordnung als „${rName}“ + der erste machbare Schritt auf dem Weg dorthin.`;
+  const result = `Persönliches Zukunftsbild + Einordnung der aktuellen Ausgangslage + der erste machbare Schritt auf dem Weg dorthin.`;
   const acuteProblem = `Die Sehnsucht nach „${ctx.dreamShort}“ ist da – aber sie fühlt sich weit weg und unklar an, wie man dort wirklich hinkommt.`;
   const wow = ctx.hasFuture && ctx.futureShort
     ? `„Oh, das ist gar nicht so weit weg, wie ich dachte!“ Der Weg zu „${ctx.futureShort}“ lässt sich in konkrete, machbare Etappen zerlegen – man muss nur den ersten wirklich gehen.`
@@ -353,7 +460,10 @@ function ideaSimulator(ctx) {
     category: 'Simulator',
     format: 'Roadmap-Canvas',
     toolName, categoryReason, formatReason, benefit, inputDescription, result,
-    acuteProblem, wowMoment: wow, resultName: rName, immediateAction, avoidAction, prognosis,
+    acuteProblem, wowMoment: wow,
+    mainCauseName: causeName, mainCauseExplanation: mainCauseExplanation(ctx, 'simulator'),
+    whyStrong: buildWhyStrong(ctx, 'simulator'),
+    immediateAction, avoidAction, prognosis,
     nextStep: nextStepFor('simulator', ctx),
     buildTime: 'ca. 45–60 Min.',
   };
@@ -361,19 +471,19 @@ function ideaSimulator(ctx) {
 
 function ideaTypanalyse(ctx) {
   const suffix = pick(SUFFIX_TYPANALYSE, ctx.seedBase, 'typ-suffix');
-  const word = ctx.targetShort ? (extractTopWords(ctx.target, 1)[0] || ctx.subjectWord) : ctx.subjectWord;
-  const toolName = `${word}-${suffix}`;
-  const rName = resultName(ctx, 'typanalyse', ctx.subjectWord);
+  const compound = `${ctx.subjectWord}-Muster`;
+  const toolName = `Warum ${compound} immer wiederkehrt?-${suffix}`;
+  const causeName = mainCauseName(ctx, 'typanalyse', ctx.subjectWord);
 
-  const categoryReason = `„${ctx.problemShort}“ folgt fast immer einem wiederkehrenden Muster – ein Audit macht dieses Muster sichtbar und einordenbar, statt nur den Einzelfall zu betrachten.`;
-  const formatReason = `Eine Typ-Analyse übersetzt ein komplexes Verhaltensmuster in ein einfaches, merkbares Ergebnis – das fühlt sich persönlich an und lädt zum Teilen ein.`;
+  const categoryReason = `Stark, weil „${ctx.problemShort}“ fast immer einem wiederkehrenden Muster folgt – ein Audit macht dieses Muster sichtbar und einordenbar.`;
+  const formatReason = `Stark, weil eine Typ-Analyse ein komplexes Verhaltensmuster in ein einfaches, merkbares Ergebnis übersetzt – persönlich und leicht teilbar.`;
   const benefit = `Ihre Wunsch-Kundin erkennt ihr eigenes wiederkehrendes Muster in stressigen Momenten – und versteht endlich, warum alte Lösungsversuche nicht dauerhaft wirken.`;
   const inputDescription = `6 Fragen zu typischer Reaktion in Stress-Momenten, Kommunikationsstil, Entscheidungsverhalten und Umgang mit Rückschlägen.`;
-  const result = `Persönlicher Muster-Typ mit Namen wie „${rName}“ + Einordnung, warum genau dieser Typ entsteht + ein typgerechter erster Hebel.`;
+  const result = `Persönlicher Muster-Typ + Einordnung, warum genau dieses Muster entsteht + ein typgerechter erster Hebel.`;
   const acuteProblem = `Immer wieder dieselbe Reaktion, obwohl sie erkennbar nicht weiterhilft – ohne zu verstehen, woher dieses Muster eigentlich kommt.`;
   const wow = wowMoment(ctx, 'typ');
   const immediateAction = `Den eigenen Muster-Typ bewusst beim nächsten kritischen Moment beobachten, bevor reagiert statt reflektiert wird.`;
-  const avoidAction = `Nicht versuchen, das Muster mit reiner Willenskraft "einfach" zu unterdrücken – das hält meist nur kurz.`;
+  const avoidAction = `Nicht versuchen, das Muster mit reiner Willenskraft „einfach“ zu unterdrücken – das hält meist nur kurz.`;
   const prognosis = `Unbeachtet wiederholt sich das Muster vermutlich in der nächsten vergleichbaren Situation. Erkannt und gezielt unterbrochen, verändert es sich spürbar schneller als gedacht.`;
 
   return {
@@ -381,7 +491,10 @@ function ideaTypanalyse(ctx) {
     category: 'Analyse/Audit',
     format: 'Typ-Analyse',
     toolName, categoryReason, formatReason, benefit, inputDescription, result,
-    acuteProblem, wowMoment: wow, resultName: rName, immediateAction, avoidAction, prognosis,
+    acuteProblem, wowMoment: wow,
+    mainCauseName: causeName, mainCauseExplanation: mainCauseExplanation(ctx, 'typanalyse'),
+    whyStrong: buildWhyStrong(ctx, 'typanalyse'),
+    immediateAction, avoidAction, prognosis,
     nextStep: nextStepFor('typanalyse', ctx),
     buildTime: 'ca. 45–60 Min.',
   };
@@ -389,17 +502,17 @@ function ideaTypanalyse(ctx) {
 
 function ideaMatcher(ctx) {
   const suffix = pick(SUFFIX_MATCHER, ctx.seedBase, 'match-suffix');
-  const word = extractTopWords(ctx.offer, 1)[0] || ctx.subjectWord;
+  const word = ctx.audienceWord;
   const toolName = `${word}-${suffix}`;
-  const rName = resultName(ctx, 'matcher', word);
+  const causeName = mainCauseName(ctx, 'matcher', word);
 
-  const categoryReason = `Die entscheidende Frage ist hier nicht „was ist falsch“, sondern „passt ${ctx.offerShort || 'dieses Angebot'} jetzt wirklich zu mir“ – ein Matcher macht genau diese Passung sichtbar.`;
-  const formatReason = `Ein Reifegrad-Check zeigt ehrlich, wie nah jemand am nächsten sinnvollen Schritt bereits ist – das senkt die Hürde für eine Kauf-Entscheidung spürbar.`;
+  const categoryReason = `Stark, weil die entscheidende Frage hier nicht „was ist falsch“ ist, sondern „passt ${ctx.offerShort || 'dieses Angebot'} jetzt wirklich zu mir“ – ein Matcher macht genau diese Passung sichtbar.`;
+  const formatReason = `Stark, weil ein Reifegrad-Check ehrlich zeigt, wie nah jemand am nächsten sinnvollen Schritt bereits ist – das senkt die Hürde für eine Entscheidung spürbar.`;
   const benefit = `Ihre Wunsch-Kundin erkennt schwarz auf weiß, wie bereit sie für „${ctx.offerShort || 'den nächsten Schritt'}“ wirklich ist – und was genau noch fehlt.`;
   const inputDescription = `5 Fragen zu aktueller Situation im Vergleich zum Ziel, Dringlichkeit, vorhandenen Ressourcen und bisherigen Lösungsversuchen.`;
-  const result = `Persönlicher Reifegrad + Einordnung als „${rName}“ + eine klare Ja/Noch-nicht-Empfehlung für den nächsten Schritt.`;
+  const result = `Persönlicher Reifegrad + Einordnung der aktuellen Situation + eine klare Ja/Noch-nicht-Empfehlung für den nächsten Schritt.`;
   const acuteProblem = `Viele zögern lange, ob „${ctx.offerShort || 'ein nächster Schritt'}“ für sie schon der richtige ist – und verschieben die Entscheidung dadurch immer weiter.`;
-  const wow = wowMoment(ctx, 'match', ctx.expertise ? `nicht fehlende Bereitschaft, sondern eine unklare Passung – genau das klärt ${ctx.expertise ? lowerFirst(stripTrailingDot(ctx.expertise)) : 'Ihre Methode'}` : null);
+  const wow = wowMoment(ctx, 'match', ctx.expertise ? `nicht fehlende Bereitschaft, sondern eine unklare Passung – genau das klärt Ihre Methode: ${lowerFirst(stripTrailingDot(ctx.expertise))}` : null);
   const immediateAction = `Die eine offene Lücke aus dem Ergebnis konkret benennen und aktiv ansprechen, statt sie zu verdrängen.`;
   const avoidAction = `Die Entscheidung nicht erneut vertagen, nur weil noch nicht alles perfekt passt.`;
   const prognosis = `Bleibt die Passungsfrage offen, verschiebt sich die Entscheidung wahrscheinlich weiter. Wird sie geklärt, fällt der nächste Schritt spürbar leichter.`;
@@ -409,7 +522,10 @@ function ideaMatcher(ctx) {
     category: 'Matcher',
     format: 'Reifegrad-Check',
     toolName, categoryReason, formatReason, benefit, inputDescription, result,
-    acuteProblem, wowMoment: wow, resultName: rName, immediateAction, avoidAction, prognosis,
+    acuteProblem, wowMoment: wow,
+    mainCauseName: causeName, mainCauseExplanation: mainCauseExplanation(ctx, 'matcher'),
+    whyStrong: buildWhyStrong(ctx, 'matcher'),
+    immediateAction, avoidAction, prognosis,
     nextStep: nextStepFor('matcher', ctx),
     buildTime: 'ca. 20–30 Min.',
   };
@@ -418,39 +534,27 @@ function ideaMatcher(ctx) {
 const ARCHETYPE_ORDER = [ideaDiagnose, ideaTypanalyse, ideaSimulator, ideaMatcher, ideaStrategie];
 
 // ---------------------------------------------------------------------------
-// Soul-DNA-Prägung: Signatur & Zukunfts-Profil verändern sichtbar Sprache,
-// Positionierung und (bei Top- & Zukunfts-Idee) den Namen.
+// Soul-DNA-Prägung: Signatur & Zukunfts-Profil verändern sichtbar den Namen
+// der Top-Idee (Tool-Name + Hauptursache-Name).
 // ---------------------------------------------------------------------------
 
 function applySoulDna(idea, ctx, isTop) {
-  let { toolName, categoryReason, benefit, resultName: rName } = idea;
-  let positioning = null;
+  let { toolName, mainCauseName: causeName } = idea;
 
-  if (ctx.hasSoul) {
+  if (isTop && ctx.hasSoul && ctx.soulTop[0]) {
     const soulWord = ctx.soulTop[0];
-    positioning = `Sprache, Auswertung und Übergang zum Angebot spiegeln Ihre Soul-Autoritäts-Signatur – Ihre Wirkung ist im Tool spürbar, nicht nur behauptet.`;
-    categoryReason += ` Das passt zugleich zu Ihrer Soul-Autoritäts-Signatur: ${truncate(ctx.soulClean, 110)}`;
-    benefit += ` Dabei ist die Handschrift Ihrer eigenen Haltung${soulWord ? ` – Stichwort „${soulWord}“` : ''} klar erkennbar.`;
-    if (isTop && soulWord) {
-      rName = `${rName} – ${soulWord}-Prägung`;
-      toolName = `${toolName} (Signature Edition)`;
-    }
+    causeName = `${causeName} – ${soulWord}-Prägung`;
+    toolName = `${toolName} (Ihre Handschrift)`;
   }
 
-  if (ctx.hasFuture) {
-    const futureWord = ctx.futureTop[0];
-    positioning = (positioning ? positioning + ' ' : '') +
-      `Die Ausrichtung folgt zusätzlich Ihrem Zukunfts-Profil${futureWord ? ` – besonders dem Fokus auf „${futureWord}“` : ''}, damit Wunsch-Kunden schon heute Ihre künftige Positionierung erleben.`;
-  }
-
-  return { ...idea, toolName, categoryReason, benefit, resultName: rName, positioning };
+  return { ...idea, toolName, mainCauseName: causeName };
 }
 
 // ---------------------------------------------------------------------------
 // Bau-Prompt
 // ---------------------------------------------------------------------------
 
-function buildPrompt(idea, ctx, index) {
+function buildPrompt(idea, ctx) {
   const lines = [];
   lines.push(`# Bau-Prompt: ${idea.toolName}`);
   lines.push('');
@@ -473,7 +577,7 @@ function buildPrompt(idea, ctx, index) {
   lines.push('');
   lines.push('## Auswertungslogik');
   lines.push(`Kategorie: ${idea.category} · Format: ${idea.format}.`);
-  lines.push(`Die Eingaben ergeben ein persönliches Ergebnis (nicht nur eine Zahl). Beispiel-Ergebnisname: "${idea.resultName}". Erzeuge 3 unterschiedliche, ähnlich benannte Ergebnis-Profile, zwischen denen je nach Antwortmuster unterschieden wird.`);
+  lines.push(`Die Eingaben ergeben ein persönliches Ergebnis (nicht nur eine Zahl). Beispiel-Hauptursache: "${idea.mainCauseName}" – ${idea.mainCauseExplanation} Erzeuge 3 unterschiedliche, ähnlich benannte Hauptursachen-Profile, zwischen denen je nach Antwortmuster unterschieden wird.`);
   lines.push(`Ergebnis-Aufbau: ${idea.result}`);
   lines.push('');
   lines.push('## WOW-Erkenntnis, die im Ergebnis vermittelt wird');
@@ -508,7 +612,7 @@ function buildPrompt(idea, ctx, index) {
   }
   lines.push('');
   lines.push('## Design');
-  lines.push('Kräftiges DSC-Blau #016E8E, helle Premium-Flächen (Off-White), Champagner/Gold (#C9A24B) ausschließlich für Sterne, Top-Empfehlung, Scores und Highlights. Weiße/offwhite Karten mit großzügigen Rundungen, großzügige Weißräume, hochwertige und sehr gut lesbare Typografie für eine Zielgruppe 45+. Primäre Buttons: Hintergrund #016E8E mit Champagner-/Gold-Schrift.');
+  lines.push('Kräftiges DSC-Blau #016E8E, helle Premium-Flächen (Off-White), Champagner/Gold (#C9A24B) ausschließlich für Sterne, Top-Empfehlung, Scores und Highlights. Weiße/offwhite Karten mit großzügigen Rundungen, großzügige Weißräume, hochwertige und sehr gut lesbare Typografie für eine Zielgruppe 45+. Primäre Buttons: Hintergrund #016E8E mit Champagner-/Gold-Schrift. Labels/Ordnungswörter in klarem dunklem CI-Blau, Label und Text stehen direkt hintereinander in einer Zeile.');
   lines.push('');
   lines.push('## Mobile');
   lines.push('Perfekt responsive für Mobile und Desktop, große Touch-Ziele, klare Lesbarkeit auf kleinen Bildschirmen.');
@@ -531,20 +635,20 @@ export function generateIdeas(rawInputs) {
   const ideas = ARCHETYPE_ORDER.map((fn, i) => {
     const base = fn(ctx);
     const withSoul = applySoulDna(base, ctx, i === 0);
+    const soulFit = buildSoulFit(ctx, base.archKey);
     return {
       id: `idea-${i + 1}`,
       rank: i + 1,
       isTop: i === 0,
       ...withSoul,
+      soulFitLabel: soulFit.label,
+      soulFit: soulFit.text,
     };
   });
 
-  const topReason = `Diese Idee trifft mit „${ctx.problemShort}“ direkt den wundesten Punkt Ihrer Wunsch-Kunden und liefert in wenigen Minuten einen Aha-Moment${ctx.hasSoul ? ', der Ihre eigene Haltung spürbar macht' : ''}. Aus dem Ergebnis entsteht ein natürlicher Übergang zu „${ctx.offerShort || 'Ihrem Angebot'}“, ohne verkäuferisch zu wirken.`;
-
-  ideas[0].topReason = topReason;
-
   ideas.forEach((idea) => {
-    idea.buildPrompt = buildPrompt(idea, ctx, idea.rank);
+    idea.mainCause = `„${idea.mainCauseName}“ – ${idea.mainCauseExplanation}`;
+    idea.buildPrompt = buildPrompt(idea, ctx);
   });
 
   return { ideas, ctx };

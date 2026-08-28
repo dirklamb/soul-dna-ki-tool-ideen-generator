@@ -57,12 +57,28 @@ const GENERIC_OFFER_WORDS = new Set([
   'begleitung','coach','berater','beraterin', 'seminar', 'kurs',
 ]);
 
+// Zerlegt den Text in Wörter und merkt sich zusätzlich, welche Wörter durch
+// einen Bindestrich (statt eines Leerzeichens) mit dem vorherigen verbunden
+// waren. Bindestrich-Komposita wie "Führungskräfte-Coaching" sind IMMER
+// zwei echte Substantive desselben Begriffs, nie Adjektiv+Substantiv — die
+// Unterscheidung wird u. a. in collectNounCandidates gebraucht.
 function tokenizeKeepCase(text) {
-  return (text || '')
-    .replace(/[.,;:!?()„“"'\-–—/]/g, ' ')
+  const rawTokens = (text || '')
+    .replace(/[.,;:!?()„“"']/g, ' ')
     .split(/\s+/)
-    .map((w) => w.trim())
+    .map((t) => t.trim())
     .filter(Boolean);
+
+  const words = [];
+  const hyphenBefore = [];
+  rawTokens.forEach((token) => {
+    token.split(/[-–—/]/).filter(Boolean).forEach((part, idx) => {
+      words.push(part);
+      hyphenBefore.push(idx > 0);
+    });
+  });
+  words.hyphenBefore = hyphenBefore;
+  return words;
 }
 
 // Kurze, generische "Füllwörter", die zwar großgeschrieben sind, aber kein
@@ -83,40 +99,91 @@ function isCapitalizedNoun(word) {
   return true;
 }
 
+// Präpositionen, nach denen Substantive im Dativ/Akkusativ stehen (z. B.
+// "in wichtigen Gesprächen") — solche gebeugten Formen sind als Tool-Namen-
+// Bestandteil unschön ("Gesprächen" statt "Gespräch") und werden deshalb
+// nur als letzte Wahl verwendet.
+const OBLIQUE_PREPOSITIONS = new Set([
+  'in','im','am','beim','zum','zur','vom','mit','bei','von','zu','nach',
+  'aus','an','auf','für','über','unter','durch','ohne','um','gegen',
+  'während','trotz','wegen','statt',
+]);
+
+/** true, wenn eines der letzten (bis zu 3) Wörter vor index i eine Präposition ist. */
+function isAfterPreposition(words, i) {
+  for (let j = i - 1; j >= Math.max(0, i - 3); j--) {
+    const w = words[j];
+    if (!w) break;
+    if (isCapitalizedNoun(w)) break; // vorherige Nominalphrase erreicht, abbrechen
+    if (OBLIQUE_PREPOSITIONS.has(w.toLowerCase())) return true;
+  }
+  return false;
+}
+
+// Typische Endungen deklinierter deutscher Adjektive (starke Deklination:
+// "erfahrene", "kleine", "großer" …). Nur als Signal genutzt, wenn direkt
+// danach ein weiteres Substantiv folgt (siehe unten) — sonst zu unsicher.
+const ADJECTIVE_ENDING = /(e|er|es|en)$/i;
+
+/**
+ * Liefert alle Substantiv-Kandidaten im Text als {word, index}, wobei ein
+ * großgeschriebenes Wort verworfen wird, wenn es wie ein dekliniertes
+ * Adjektiv endet UND direkt von einem weiteren Substantiv gefolgt wird
+ * (z. B. "Erfahrene Coaches" → nur "Coaches" zählt als Substantiv).
+ */
+function collectNounCandidates(words) {
+  const hyphenBefore = words.hyphenBefore || [];
+  const raw = [];
+  words.forEach((w, i) => {
+    if (isCapitalizedNoun(w)) raw.push({ word: w, index: i });
+  });
+  return raw.filter((c, idx) => {
+    const next = raw[idx + 1];
+    const directlyAfterBySpace = next && next.index === c.index + 1 && !hyphenBefore[next.index];
+    return !(directlyAfterBySpace && ADJECTIVE_ENDING.test(c.word));
+  });
+}
+
 /** Größte, distinkteste "Subjekt"-Substantive + ein Emotionswort, falls vorhanden. */
 function extractSubjectAndEmotion(text) {
   const words = tokenizeKeepCase(text);
-  const nounCandidates = words.filter(isCapitalizedNoun);
   const emotion = words.find((w) => EMOTION_WORDS.has(w.toLowerCase()));
+  const emotionKey = (emotion || '').toLowerCase();
 
   const seen = new Set();
-  const distinctNouns = [];
-  for (const w of nounCandidates) {
+  const candidates = [];
+  collectNounCandidates(words).forEach(({ word: w, index: i }) => {
     const key = w.toLowerCase();
-    if (!seen.has(key) && key !== (emotion || '').toLowerCase()) {
-      seen.add(key);
-      distinctNouns.push(w);
-    }
-  }
+    if (seen.has(key) || key === emotionKey) return;
+    seen.add(key);
+    candidates.push({ word: w, afterPreposition: isAfterPreposition(words, i) });
+  });
 
-  const subject = distinctNouns[0] || null;
-  // Für das zweite Wort lieber das längste (spezifischste) verbleibende
-  // Substantiv nehmen statt einfach das nächste im Text — das vermeidet
-  // zufällige Nebenwörter als Namensbestandteil.
-  const secondaryNoun = [...distinctNouns]
-    .filter((w) => w !== subject)
-    .sort((a, b) => b.length - a.length)[0] || null;
+  // Subjekt: bevorzugt ein Substantiv, das NICHT nach einer Präposition
+  // steht (meist der grammatische Satz-Bezug, nicht gebeugt).
+  const subjectCandidate = candidates.find((c) => !c.afterPreposition) || candidates[0] || null;
+  const subject = subjectCandidate ? subjectCandidate.word : null;
+
+  // Zweites Wort: das längste (spezifischste) verbleibende Substantiv,
+  // ebenfalls bevorzugt außerhalb einer Präpositionalphrase.
+  const remaining = candidates.filter((c) => c.word !== subject);
+  const byLength = (a, b) => b.word.length - a.word.length;
+  const secondaryCandidate =
+    remaining.filter((c) => !c.afterPreposition).sort(byLength)[0] ||
+    remaining.sort(byLength)[0] ||
+    null;
 
   return {
     subject,
     emotion: emotion ? capitalize(emotion) : null,
-    secondary: secondaryNoun,
+    secondary: secondaryCandidate ? secondaryCandidate.word : null,
   };
 }
 
 function extractTopWords(text, n = 3, exclude = null) {
-  const words = tokenizeKeepCase(text)
-    .filter(isCapitalizedNoun)
+  const rawWords = tokenizeKeepCase(text);
+  const words = collectNounCandidates(rawWords)
+    .map((c) => c.word)
     .filter((w) => !exclude || !exclude.has(w.toLowerCase()));
   const seen = new Set();
   const out = [];
@@ -146,6 +213,25 @@ function truncate(text, maxLen = 90) {
 
 function stripTrailingDot(s) {
   return (s || '').trim().replace(/[.\s]+$/, '');
+}
+
+// Deutsches "Fugen-s": nach diesen Endungen wird beim Zusammensetzen fast
+// immer ein Bindungs-s eingefügt (z. B. "Souveränität" + "Expertin" →
+// "Souveränitäts-Expertin").
+function withFugenS(word) {
+  return /(tät|heit|keit|ung|schaft|tion|sion|tum|ling)$/i.test(word) ? `${word}s` : word;
+}
+
+/**
+ * Kurzer, vollständiger erster Halbsatz (bis zum ersten Komma/Semikolon),
+ * damit Zitate nicht mitten im Wort abgeschnitten werden. Fällt auf ein
+ * wortgrenzen-sicheres truncate() zurück, wenn kein Komma in Reichweite ist.
+ */
+function firstClause(text, maxLen = 70) {
+  const clean = stripTrailingDot(text || '');
+  const commaIdx = clean.search(/[,;]/);
+  if (commaIdx > 8 && commaIdx <= maxLen) return clean.slice(0, commaIdx);
+  return truncate(clean, maxLen);
 }
 
 /** Entfernt ein einleitendes Feld-Label wie "Meine Soul-Autoritäts-Signatur: " */
@@ -241,19 +327,29 @@ function buildContext(raw) {
   const secondaryWord = emotionWord || problemEx.secondary || targetEx.subject || 'Muster';
   const dreamWord = dreamEx.subject || dreamEx.emotion || extractTopWords(dream, 1)[0] || 'Ziel';
   const audienceWord = nicheTop[0] || subjectWord;
+  // Eigene Anker-Wörter für Zielgruppe & Expertise, damit nicht alle 5 Ideen
+  // denselben Namensbestandteil (meist das Problem-Subjekt) teilen.
+  const targetWord = targetEx.subject || nicheTop[0] || subjectWord;
+  const expertiseWord = expertiseTop[0] || subjectWord;
 
   return {
     niche, target, problem, dream, offer, expertise, soul, future,
     soulClean, futureClean,
-    subjectWord, emotionWord, secondaryWord, dreamWord, audienceWord,
+    subjectWord, emotionWord, secondaryWord, dreamWord, audienceWord, targetWord, expertiseWord,
     expertiseTop, soulTop, futureTop, nicheTop,
     hasSoul: soul.length > 0,
     hasFuture: future.length > 0,
-    targetShort: stripTrailingDot(truncate(target, 70)),
-    problemShort: stripTrailingDot(truncate(problem, 90)),
-    dreamShort: stripTrailingDot(truncate(dream, 90)),
-    offerShort: stripTrailingDot(truncate(offer, 70)),
-    futureShort: stripTrailingDot(truncate(futureClean, 90)),
+    // Großzügig genug für eine reale, ausformulierte Ein-Satz-Antwort, damit
+    // Zitate nicht mitten im Wort abbrechen.
+    targetShort: stripTrailingDot(truncate(target, 110)),
+    problemShort: stripTrailingDot(truncate(problem, 150)),
+    dreamShort: stripTrailingDot(truncate(dream, 150)),
+    offerShort: stripTrailingDot(truncate(offer, 110)),
+    futureShort: stripTrailingDot(truncate(futureClean, 150)),
+    // Kurzer erster Halbsatz für Stellen, an denen dasselbe Zitat sonst
+    // mehrfach pro Karte auftauchen würde (z. B. im Nutzen-Satz).
+    problemClause: firstClause(problem, 95),
+    dreamClause: firstClause(dream, 95),
     seedBase: `${niche}|${target}|${problem}|${dream}|${offer}|${expertise}`,
   };
 }
@@ -306,15 +402,15 @@ function wowMoment(ctx, salt, deeperCauseOverride) {
 function buildWhyStrong(ctx, archKey) {
   switch (archKey) {
     case 'diagnose':
-      return `Sie beantwortet die Frage, die hinter „${ctx.problemShort}“ steckt, und macht sofort Lust auf den nächsten konkreten Schritt.`;
+      return `Sie beantwortet eine Frage, die Ihre Wunsch-Kunden im Alltag unmittelbar beschäftigt, und liefert eine Erkenntnis, die sich direkt auf die nächste reale Situation anwenden lässt.`;
     case 'typanalyse':
-      return `Sie macht ein Muster sichtbar, das hinter „${ctx.problemShort}“ steckt und bisher niemand richtig benennen konnte.`;
+      return `Sie macht ein Muster sichtbar, das Ihre Wunsch-Kunden an sich selbst längst spüren, aber bisher nicht benennen konnten.`;
     case 'simulator':
-      return `Sie macht „${ctx.dreamShort}“ schon heute greifbar und zeigt sofort einen ersten machbaren Schritt dorthin.`;
+      return `Sie macht ein Zukunftsbild greifbar, nach dem sich Ihre Wunsch-Kunden insgeheim sehnen, und zeigt sofort einen ersten machbaren Schritt dorthin.`;
     case 'matcher':
-      return `Sie beantwortet die eine Frage, die vor „${ctx.offerShort || 'einer Entscheidung'}“ im Kopf steht: Passt das jetzt wirklich zu mir?`;
+      return `Sie beantwortet die eine Frage, die vor jeder Entscheidung im Kopf steht: Passt das jetzt wirklich zu mir?`;
     case 'strategie':
-      return `Sie nimmt die Überforderung durch zu viele Optionen und liefert eine einzige klare Empfehlung auf dem Weg zu „${ctx.dreamShort}“.`;
+      return `Sie nimmt die Überforderung durch zu viele Optionen und liefert stattdessen eine einzige klare Empfehlung für den nächsten Schritt.`;
     default:
       return ARCH_STRENGTH_LABEL[archKey] || '';
   }
@@ -322,20 +418,34 @@ function buildWhyStrong(ctx, archKey) {
 
 function nextStepFor(archKey, ctx) {
   const offer = ctx.offerShort || 'Ihr Angebot';
+  let step;
   switch (archKey) {
     case 'diagnose':
-      return `Kurzes 4-Minuten-Video „So lösen Sie das sichtbar gewordene Muster“ → direkter Termin-Kalender für ${offer}.`;
+      step = `Kurzes 4-Minuten-Video „So lösen Sie das sichtbar gewordene Muster“ → direkter Termin-Kalender für ${offer}.`;
+      break;
     case 'strategie':
-      return `Mini-Guide/PDF mit dem passenden nächsten Schritt → Termin-Kalender für ${offer}.`;
+      step = `Mini-Guide/PDF mit dem passenden nächsten Schritt → Termin-Kalender für ${offer}.`;
+      break;
     case 'simulator':
-      return `Einladung zu einem Live-Workshop/Webinar, in dem der Weg zum Zielbild konkret wird → Übergang zu ${offer}.`;
+      step = `Einladung zu einem Live-Workshop/Webinar, in dem der Weg zum Zielbild konkret wird → Übergang zu ${offer}.`;
+      break;
     case 'typanalyse':
-      return `Vertiefender Check zum eigenen Muster per E-Mail → persönlicher Termin-Kalender für ${offer}.`;
+      step = `Vertiefender Check zum eigenen Muster per E-Mail → persönlicher Termin-Kalender für ${offer}.`;
+      break;
     case 'matcher':
-      return `Direkter Sprung auf die Angebotsseite von ${offer} mit persönlicher Terminbuchung.`;
+      step = `Direkter Sprung auf die Angebotsseite von ${offer} mit persönlicher Terminbuchung.`;
+      break;
     default:
-      return `Persönlicher Termin-Kalender für ${offer}.`;
+      step = `Persönlicher Termin-Kalender für ${offer}.`;
   }
+
+  // Zukunfts-Profil soll sichtbar auch den Übergang zum Angebot prägen,
+  // nicht nur unter "Details" erwähnt werden.
+  if (ctx.hasFuture && ctx.futureTop[0]) {
+    step += ` Im Kalender-Gespräch direkt an Ihre künftige Positionierung als ${withFugenS(ctx.futureTop[0])}-Expertin anknüpfen.`;
+  }
+
+  return step;
 }
 
 function buildSoulFit(ctx, archKey) {
@@ -369,9 +479,9 @@ function ideaDiagnose(ctx) {
   const n = 6;
   const causeName = mainCauseName(ctx, 'diagnose', secondary || primary);
 
-  const categoryReason = `Stark, weil das Tool nicht nur Tipps gibt, sondern die konkrete Ursache hinter „${ctx.problemShort}“ sichtbar macht.`;
+  const categoryReason = `Stark, weil das Tool nicht nur Tipps gibt, sondern die konkrete Ursache hinter dem akuten Problem sichtbar macht.`;
   const formatReason = `Stark, weil Ihre Wunsch-Kundin in wenigen Minuten ein persönliches Ergebnis mit klarer Einordnung bekommt – ohne sich bloßgestellt zu fühlen.`;
-  const benefit = `Ihre Wunsch-Kundin erkennt in wenigen Minuten, warum „${ctx.problemShort}“ wirklich passiert – und was sie als Erstes anders machen kann.`;
+  const benefit = `Ihre Wunsch-Kundin erkennt, warum „${ctx.problemClause}“ wirklich passiert – und was sie als Erstes anders machen kann.`;
   const inputDescription = `${n} Fragen zu ${dims.slice(0, 4).join(', ')} und ${dims[4] || 'Kommunikation im Alltag'}.`;
   const result = `Hauptursache erkennen + persönliche Einordnung + ein konkreter erster Veränderungs-Schritt.`;
   const acuteProblem = `${capitalize(ctx.problemShort)}.`;
@@ -396,7 +506,7 @@ function ideaDiagnose(ctx) {
 
 function ideaStrategie(ctx) {
   const suffix = pick(SUFFIX_STRATEGIE, ctx.seedBase, 'strategie-suffix');
-  const compound = `${ctx.subjectWord}-Stillstand`;
+  const compound = `${ctx.expertiseWord}-Stillstand`;
   const toolName = `Warum ${compound} einfach nicht aufhört?-${suffix}`;
   const causeName = mainCauseName(ctx, 'strategie', ctx.dreamWord);
 
@@ -471,11 +581,11 @@ function ideaSimulator(ctx) {
 
 function ideaTypanalyse(ctx) {
   const suffix = pick(SUFFIX_TYPANALYSE, ctx.seedBase, 'typ-suffix');
-  const compound = `${ctx.subjectWord}-Muster`;
+  const compound = `${ctx.targetWord}-Muster`;
   const toolName = `Warum ${compound} immer wiederkehrt?-${suffix}`;
-  const causeName = mainCauseName(ctx, 'typanalyse', ctx.subjectWord);
+  const causeName = mainCauseName(ctx, 'typanalyse', ctx.targetWord);
 
-  const categoryReason = `Stark, weil „${ctx.problemShort}“ fast immer einem wiederkehrenden Muster folgt – ein Audit macht dieses Muster sichtbar und einordenbar.`;
+  const categoryReason = `Stark, weil das akute Problem fast immer einem wiederkehrenden Muster folgt – ein Audit macht dieses Muster sichtbar und einordenbar, statt nur den Einzelfall zu betrachten.`;
   const formatReason = `Stark, weil eine Typ-Analyse ein komplexes Verhaltensmuster in ein einfaches, merkbares Ergebnis übersetzt – persönlich und leicht teilbar.`;
   const benefit = `Ihre Wunsch-Kundin erkennt ihr eigenes wiederkehrendes Muster in stressigen Momenten – und versteht endlich, warum alte Lösungsversuche nicht dauerhaft wirken.`;
   const inputDescription = `6 Fragen zu typischer Reaktion in Stress-Momenten, Kommunikationsstil, Entscheidungsverhalten und Umgang mit Rückschlägen.`;

@@ -266,12 +266,12 @@ function pick(arr, seedStr, salt = '') {
 // ---------------------------------------------------------------------------
 
 const SUFFIX_DIAGNOSE = ['Kompass', 'Check', 'Spiegel', 'Barometer'];
-const SUFFIX_STRATEGIE = ['Wegweiser', 'Fahrplan', 'Kurswechsel'];
 const SUFFIX_SIMULATOR = ['Zukunftsbild', 'Zielbild', 'Aufbruch', 'Vision'];
-const SUFFIX_TYPANALYSE = ['Check', 'Analyse'];
-const SUFFIX_MATCHER = ['Potenzial-Check', 'Bereitschafts-Check', 'Fit-Check'];
+// "Potenzial-Check" bewusst nicht enthalten: klingt zu sehr nach
+// Business-/Sales-Jargon und passt nicht in jede Nische (z. B. Eltern-Coaching).
+const SUFFIX_MATCHER = ['Bereitschafts-Check', 'Fit-Check'];
 
-const FALSE_ASSUMPTIONS = ['unmotiviert', 'schwierig', 'nicht willens', 'desinteressiert', 'stur'];
+const FALSE_ASSUMPTIONS = ['unmotiviert', 'schwierig', 'faul', 'desinteressiert', 'stur'];
 const WRONG_REFLEXES = ['mehr Druck', 'mehr Kontrolle', 'mehr Ermahnungen', 'noch mehr Erklärungen', 'noch mehr Disziplin'];
 
 const RESULT_ADJECTIVES = ['stille', 'unsichtbare', 'heimliche', 'verborgene', 'eigentliche'];
@@ -331,12 +331,13 @@ function buildContext(raw) {
   // denselben Namensbestandteil (meist das Problem-Subjekt) teilen.
   const targetWord = targetEx.subject || nicheTop[0] || subjectWord;
   const expertiseWord = expertiseTop[0] || subjectWord;
+  const personRef = personReference(niche, target, problem, dream);
 
   return {
     niche, target, problem, dream, offer, expertise, soul, future,
     soulClean, futureClean,
     subjectWord, emotionWord, secondaryWord, dreamWord, audienceWord, targetWord, expertiseWord,
-    expertiseTop, soulTop, futureTop, nicheTop,
+    expertiseTop, soulTop, futureTop, nicheTop, personRef,
     hasSoul: soul.length > 0,
     hasFuture: future.length > 0,
     // Großzügig genug für eine reale, ausformulierte Ein-Satz-Antwort, damit
@@ -389,14 +390,31 @@ function mainCauseExplanation(ctx, archKey) {
   }
 }
 
+// Wer ist von dem Muster konkret betroffen? Der WOW-Moment muss wie ein
+// echter innerer Gedanke der Kundin klingen ("mein Kind", "mein
+// Mitarbeiter" …) statt eines unpersönlichen "jemand".
+const PERSON_PATTERNS = [
+  { test: /\bkind(er)?\b|\bkids\b|\bschüler(in)?\b|\bteenager\b/, phrase: 'mein Kind' },
+  { test: /\bmitarbeiter(in)?\b|\bteam(mitglied)?\b|\bangestellte[nr]?\b/, phrase: 'mein Mitarbeiter' },
+  { test: /\bpartner(in)?\b|\bbeziehung\b|\bpaar(e)?\b|\behe\b/, phrase: 'mein Partner' },
+];
+
+function personReference(niche, target, problem, dream) {
+  const text = `${niche} ${target} ${problem} ${dream}`.toLowerCase();
+  const match = PERSON_PATTERNS.find((p) => p.test.test(text));
+  if (match) return { phrase: match.phrase, copula: 'ist' };
+  return { phrase: 'ich', copula: 'bin' };
+}
+
 function wowMoment(ctx, salt, deeperCauseOverride) {
   const assumption = pick(FALSE_ASSUMPTIONS, ctx.seedBase, salt + 'assume');
   const reflex = pick(WRONG_REFLEXES, ctx.seedBase, salt + 'reflex');
+  const { phrase, copula } = ctx.personRef;
   const deeperCause = deeperCauseOverride ||
     (ctx.expertise
       ? `genau das, was Ihre Methode aufdeckt: ${lowerFirst(stripTrailingDot(ctx.expertise))}`
       : `eine tiefer liegende Ursache, die auf den ersten Blick unsichtbar bleibt`);
-  return `„Oh – das liegt also gar nicht daran, dass hier einfach jemand ${assumption} ist!“ Dahinter steckt eher ${deeperCause}, und ${reflex} verstärkt genau dieses Muster.`;
+  return `„Oh – ${phrase} ${copula} ja gar nicht ${assumption}!“ Dahinter steckt eher ${deeperCause}, und ${reflex} verstärkt genau dieses Muster.`;
 }
 
 function buildWhyStrong(ctx, archKey) {
@@ -505,9 +523,8 @@ function ideaDiagnose(ctx) {
 }
 
 function ideaStrategie(ctx) {
-  const suffix = pick(SUFFIX_STRATEGIE, ctx.seedBase, 'strategie-suffix');
   const compound = `${ctx.expertiseWord}-Stillstand`;
-  const toolName = `Warum ${compound} einfach nicht aufhört?-${suffix}`;
+  const toolName = `Warum ${compound} einfach nicht aufhört?`;
   const causeName = mainCauseName(ctx, 'strategie', ctx.dreamWord);
 
   const categoryReason = `Stark, weil nach der Ursachen-Klarheit die richtige nächste Entscheidung über Fortschritt oder Stillstand entscheidet.`;
@@ -580,9 +597,8 @@ function ideaSimulator(ctx) {
 }
 
 function ideaTypanalyse(ctx) {
-  const suffix = pick(SUFFIX_TYPANALYSE, ctx.seedBase, 'typ-suffix');
   const compound = `${ctx.targetWord}-Muster`;
-  const toolName = `Warum ${compound} immer wiederkehrt?-${suffix}`;
+  const toolName = `Warum ${compound} immer wiederkehrt?`;
   const causeName = mainCauseName(ctx, 'typanalyse', ctx.targetWord);
 
   const categoryReason = `Stark, weil das akute Problem fast immer einem wiederkehrenden Muster folgt – ein Audit macht dieses Muster sichtbar und einordenbar, statt nur den Einzelfall zu betrachten.`;
@@ -654,7 +670,7 @@ function applySoulDna(idea, ctx, isTop) {
   if (isTop && ctx.hasSoul && ctx.soulTop[0]) {
     const soulWord = ctx.soulTop[0];
     causeName = `${causeName} – ${soulWord}-Prägung`;
-    toolName = `${toolName} (Ihre Handschrift)`;
+    toolName = `${toolName} (mit Ihrer Handschrift)`;
   }
 
   return { ...idea, toolName, mainCauseName: causeName };

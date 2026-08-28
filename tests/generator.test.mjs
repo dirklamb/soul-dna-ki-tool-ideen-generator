@@ -29,11 +29,11 @@ const CASES = [
     name: 'Führungskräfte-Coaching',
     input: {
       niche: 'Führungskräfte-Coaching',
-      target: 'Führungskräfte im Mittelstand, deren Teams zunehmend nur noch Dienst nach Vorschrift machen.',
-      problem: 'Mitarbeiter machen nur noch Dienst nach Vorschrift und bringen sich kaum noch ein.',
-      dream: 'Das Team übernimmt wieder Verantwortung und bringt eigene Ideen ein.',
+      target: 'Führungskräfte im Mittelstand, deren Mitarbeiter in wichtigen Gesprächen abblocken und Widerstand zeigen.',
+      problem: 'Mitarbeiter blocken in wichtigen Gesprächen ab, reagieren defensiv und verändern ihr Verhalten danach nicht.',
+      dream: 'Mitarbeiter übernehmen mehr Eigenverantwortung und bringen sich offen ins Gespräch ein.',
       offer: '3-Monats-Führungs-Coaching für 3.500 €.',
-      expertise: 'Ich erkenne die eigentliche Vertrauensblockade zwischen Führungskraft und Team und löse sie gezielt auf.',
+      expertise: 'Ich erkenne die eigentliche Vertrauensblockade zwischen Führungskraft und Mitarbeiter und löse sie gezielt auf.',
     },
   },
   {
@@ -103,6 +103,11 @@ for (const c of CASES) {
       assert.ok(wordCount <= 9, `Tool-Name zu lang/unverständlich: "${idea.toolName}"`);
       assertNoJargon(idea.toolName, `Tool-Name (${idea.archKey})`);
       assertNoJargon(idea.mainCauseName, `Hauptursache-Name (${idea.archKey})`);
+
+      // Regression: Zitate dürfen nie mitten im Wort abgeschnitten sein.
+      for (const field of ['benefit', 'acuteProblem', 'categoryReason', 'whyStrong', 'mainCause']) {
+        assert.ok(!idea[field].includes('…'), `${field} wurde mitten im Wort abgeschnitten: ${idea[field]}`);
+      }
     }
 
     const hasFutureLeaningIdea = ideas.some((i) => i.archKey === 'simulator');
@@ -124,6 +129,49 @@ for (const c of CASES) {
       assert.notEqual(base.ideas[i].soulFit, withSoul.ideas[i].soulFit);
       assert.ok(withSoul.ideas[i].buildPrompt.includes('Soul-Autoritäts-Signatur'));
       assert.ok(withSoul.ideas[i].buildPrompt.includes('Zukunfts-Profil'));
+      // Zukunfts-Profil muss auch den "Nächster Schritt" sichtbar prägen, nicht
+      // nur unter Details erwähnt werden (Punkt 26: Soul-DNA nicht nur erwähnen).
+      assert.notEqual(base.ideas[i].nextStep, withSoul.ideas[i].nextStep, `Nächster Schritt von Idee ${i + 1} sollte sich durch das Zukunfts-Profil ändern`);
     }
   });
 }
+
+test('Regression: satzanfangsbedingte Adjektive und Präpositional-Objekte landen nicht in Tool-Namen', () => {
+  const { ideas } = generateIdeas({
+    niche: 'Premium-Business-Coaching für Coaches, Berater, Heiler und Experten 45+',
+    target: 'Erfahrene Coaches und Berater 45+, deren Angebote gut sind, aber sich schlecht verkaufen.',
+    problem: 'Wunschkunden zögern lange und kaufen am Ende doch nicht, obwohl das Erstgespräch gut lief.',
+    dream: 'Premiumkunden erkennen den Wert sofort und entscheiden sich schnell und sicher.',
+    offer: 'Premium-Positionierungs-Mentoring, 10 Wochen, 5.900 €.',
+    expertise: 'Ich erkenne die eigentliche Positionierungslücke und schärfe das Angebot so, dass es sich von selbst verkauft.',
+  });
+  const allText = ideas.map((i) => `${i.toolName} ${i.mainCauseName}`).join(' | ');
+  assert.doesNotMatch(allText, /\bErfahrene\b/, `"Erfahrene" (Adjektiv) darf nicht als Tool-Namen-Wort auftauchen: ${allText}`);
+
+  const { ideas: ideas2 } = generateIdeas({
+    niche: 'Führungskräfte-Coaching',
+    target: 'Führungskräfte im Mittelstand, deren Mitarbeiter in wichtigen Gesprächen abblocken und Widerstand zeigen.',
+    problem: 'Mitarbeiter blocken in wichtigen Gesprächen ab, reagieren defensiv und verändern ihr Verhalten danach nicht.',
+    dream: 'Mitarbeiter übernehmen mehr Eigenverantwortung und bringen sich offen ins Gespräch ein.',
+    offer: '3-Monats-Führungs-Coaching für 3.500 €.',
+    expertise: 'Ich erkenne die eigentliche Vertrauensblockade zwischen Führungskraft und Mitarbeiter und löse sie gezielt auf.',
+  });
+  const allText2 = ideas2.map((i) => `${i.toolName} ${i.mainCauseName}`).join(' | ');
+  assert.doesNotMatch(allText2, /\bGesprächen\b/, `"Gesprächen" (gebeugt, nach Präposition) darf nicht als Tool-Namen-Wort auftauchen: ${allText2}`);
+  // Hyphen-Komposita wie "Führungskräfte-Coaching" bleiben unangetastet.
+  assert.match(allText2, /Führungskräfte/, 'Der Nischenbegriff "Führungskräfte" sollte weiterhin extrahierbar sein');
+});
+
+test('Regression: "Beide"/"Kleine" (satzanfangsbedingte Pronomen/Adjektive) landen nicht in Tool-Namen', () => {
+  const { ideas } = generateIdeas({
+    niche: 'Beziehungs-Coaching',
+    target: 'Paare, die seit Jahren immer wieder in denselben Streit geraten.',
+    problem: 'Kleine Meinungsverschiedenheiten eskalieren regelmäßig zu großem Streit.',
+    dream: 'Beide fühlen sich wieder gehört und finden schnell zueinander zurück.',
+    offer: 'Paar-Intensiv-Coaching, 6 Wochen, 2.200 €.',
+    expertise: 'Ich erkenne das unsichtbare Beziehungsmuster hinter dem Streit und löse den Kreislauf gezielt auf.',
+  });
+  const allText = ideas.map((i) => `${i.toolName} ${i.mainCauseName}`).join(' | ');
+  assert.doesNotMatch(allText, /\bKleine\b/, allText);
+  assert.doesNotMatch(allText, /\bBeide\b/, allText);
+});

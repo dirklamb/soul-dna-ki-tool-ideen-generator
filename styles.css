@@ -341,11 +341,31 @@ textarea:focus, input[type="text"]:focus {
   40% { transform: scale(1); opacity: 1; }
 }
 
+/* ---------- Results hero (full-bleed blue header) ---------- */
+
+.results-hero {
+  display: none;
+  background: var(--dsc-blue);
+  padding: 52px 24px 44px;
+  text-align: center;
+}
+
+.results-hero.is-active { display: block; }
+
+.results-hero-inner { max-width: 640px; margin: 0 auto; }
+
+.results-hero .kicker { color: var(--gold-soft); margin-bottom: 16px; }
+.results-hero .headline { color: #FFFFFF; font-size: 30px; margin-bottom: 14px; }
+.results-hero .subline { color: rgba(255, 255, 255, 0.85); margin: 0 auto; }
+
+@media (min-width: 640px) {
+  .results-hero { padding: 76px 32px 60px; }
+  .results-hero .headline { font-size: 38px; }
+}
+
 /* ---------- Results ---------- */
 
-.results-header { text-align: center; margin-bottom: 36px; }
-
-.results-header .headline { font-size: 30px; }
+#ideas-container { margin-top: 8px; }
 
 .idea-card {
   position: relative;

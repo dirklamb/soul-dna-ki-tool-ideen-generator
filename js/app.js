@@ -56,6 +56,7 @@ document.querySelectorAll('[id]').forEach((el) => { els[el.id] = el; });
 function showScreen(id) {
   document.querySelectorAll('.screen').forEach((s) => s.classList.remove('is-active'));
   document.getElementById(id).classList.add('is-active');
+  els['results-hero'].classList.toggle('is-active', id === 'screen-results');
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 

@@ -104,6 +104,16 @@ for (const c of CASES) {
       assertNoJargon(idea.toolName, `Tool-Name (${idea.archKey})`);
       assertNoJargon(idea.mainCauseName, `Hauptursache-Name (${idea.archKey})`);
 
+      // Kategorie/Format dürfen nicht Teil des Tool-Namens sein (kein
+      // "?-Check"/"?-Analyse"/"?-Fahrplan" o.ä. nach einem Fragezeichen).
+      assert.doesNotMatch(idea.toolName, /\?-\S/, `Tool-Name darf keinen Kategorie-/Format-Suffix nach dem Fragezeichen tragen: "${idea.toolName}"`);
+      assert.doesNotMatch(idea.toolName, /Potenzial-Check/i, `"Potenzial-Check" klingt zu sehr nach Business-Jargon für jede Nische: "${idea.toolName}"`);
+
+      // WOW-Moment muss aus Sicht einer konkreten Person klingen, nie "jemand"/"einfach".
+      assert.doesNotMatch(idea.wowMoment, /\bjemand\b/i, `WOW-Moment darf "jemand" nicht verwenden: ${idea.wowMoment}`);
+      assert.doesNotMatch(idea.wowMoment, /einfach jemand|gar nicht einfach/i, `WOW-Moment darf "einfach" nicht wie zuvor verwenden: ${idea.wowMoment}`);
+      assert.doesNotMatch(idea.wowMoment, /\bnicht nicht\b/i, `WOW-Moment enthält eine doppelte Verneinung: ${idea.wowMoment}`);
+
       // Regression: Zitate dürfen nie mitten im Wort abgeschnitten sein.
       for (const field of ['benefit', 'acuteProblem', 'categoryReason', 'whyStrong', 'mainCause']) {
         assert.ok(!idea[field].includes('…'), `${field} wurde mitten im Wort abgeschnitten: ${idea[field]}`);
@@ -121,7 +131,7 @@ for (const c of CASES) {
     // Top-Idee: Tool-Name und Hauptursache-Name müssen sich sichtbar ändern.
     assert.notEqual(base.ideas[0].toolName, withSoul.ideas[0].toolName, 'Top-Tool-Name sollte sich durch Soul-DNA ändern');
     assert.notEqual(base.ideas[0].mainCauseName, withSoul.ideas[0].mainCauseName, 'Hauptursache der Top-Idee sollte sich durch Soul-DNA ändern');
-    assert.match(withSoul.ideas[0].toolName, /Handschrift/);
+    assert.match(withSoul.ideas[0].toolName, /\(mit Ihrer Handschrift\)/, 'Der Zusatz muss exakt "(mit Ihrer Handschrift)" lauten');
 
     // Für alle 5 Ideen muss der Soul-DNA-Fit-Block auf "Soul-DNA-Fit" umschalten und konkret bleiben.
     for (let i = 0; i < 5; i++) {
@@ -174,4 +184,24 @@ test('Regression: "Beide"/"Kleine" (satzanfangsbedingte Pronomen/Adjektive) land
   const allText = ideas.map((i) => `${i.toolName} ${i.mainCauseName}`).join(' | ');
   assert.doesNotMatch(allText, /\bKleine\b/, allText);
   assert.doesNotMatch(allText, /\bBeide\b/, allText);
+});
+
+test('WOW-Moment spricht aus Sicht einer konkreten, zur Nische passenden Person', () => {
+  const base = {
+    offer: 'Ein Angebot, 6 Wochen, 1.000 €.',
+    expertise: 'Ich erkenne die eigentliche Ursache und löse sie gezielt auf.',
+  };
+
+  const kind = generateIdeas({ ...base, niche: 'Eltern-Coaching', target: 'Eltern von Kindern der Grundschule.', problem: 'Das Kind verweigert die Hausaufgaben.', dream: 'Das Kind lernt gern.' });
+  assert.match(kind.ideas[0].wowMoment, /mein Kind/);
+
+  const mitarbeiter = generateIdeas({ ...base, niche: 'Führungskräfte-Coaching', target: 'Führungskräfte mit schwierigen Teams.', problem: 'Der Mitarbeiter blockt im Gespräch ab.', dream: 'Das Team übernimmt Verantwortung.' });
+  assert.match(mitarbeiter.ideas[0].wowMoment, /mein Mitarbeiter/);
+
+  const partner = generateIdeas({ ...base, niche: 'Beziehungs-Coaching', target: 'Paare in einer Krise.', problem: 'Der Partner zieht sich im Streit zurück.', dream: 'Beide finden wieder zueinander.' });
+  assert.match(partner.ideas[0].wowMoment, /mein Partner/);
+
+  // Ohne erkennbare dritte Person (z. B. Unternehmerin, die an sich selbst arbeitet) → erste Person.
+  const selbst = generateIdeas({ ...base, niche: 'Souveränitäts-Coaching für Unternehmerinnen', target: 'Unternehmerinnen, die nach Entscheidungen nicht abschalten können.', problem: 'Ich kann nach Entscheidungen nicht abschalten.', dream: 'Ich entscheide souverän und schalte danach ab.' });
+  assert.match(selbst.ideas[0].wowMoment, /„Oh – ich bin/);
 });

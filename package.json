@@ -1,0 +1,10 @@
+{
+  "name": "soul-dna-ki-tool-ideen-generator",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Soul-DNA KI-Tool-Ideen-Generator – statisches Web-Tool, ohne Login und ohne externe API, lauffähig über GitHub Pages.",
+  "scripts": {
+    "test": "node --test tests/*.test.mjs"
+  }
+}

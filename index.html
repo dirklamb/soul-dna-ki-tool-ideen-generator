@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5">
+<title>Soul-DNA KI-Tool-Ideen-Generator</title>
+<meta name="description" content="Entdecken Sie 5 außergewöhnliche KI-Tool-Ideen für Ihre Soul-DNA-Positionierung.">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="app-shell">
+
+  <div class="brand-bar"><span class="dot"></span> Soul-DNA KI-Tool-Ideen-Generator</div>
+
+  <!-- ============================== START ============================== -->
+  <section id="screen-start" class="screen is-active">
+    <p class="kicker">Ihr persönlicher KI-Tool-Ideen-Generator</p>
+    <h1 class="headline">Welches KI-Tool passt wirklich<br>zu Ihrer Soul-DNA?</h1>
+    <p class="subline">Entdecken Sie 5 außergewöhnliche KI-Tool-Ideen, die Ihre Expertise, Positionierung und Einzigartigkeit erlebbar machen, Wunsch-Kunden begeistern und Lust auf mehr erzeugen.</p>
+    <div class="cta-wrap">
+      <button class="btn btn-primary" id="btn-start" type="button">Meine 5 stärksten KI-Tool-Ideen entdecken</button>
+    </div>
+    <p class="footnote">Mit <strong>Soul-Autoritäts-Signatur</strong> und <strong>Zukunfts-Profil</strong> werden Ihre Ideen noch individueller.</p>
+  </section>
+
+  <!-- ============================== WIZARD ============================== -->
+  <section id="screen-wizard" class="screen">
+    <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
+    <p class="step-label" id="step-label"></p>
+    <div class="question-card">
+      <h2 class="question-text" id="question-text"></h2>
+      <p class="question-help" id="question-help"></p>
+      <div class="question-example" id="question-example" style="display:none;">
+        Beispiel: <span id="question-example-text"></span>
+      </div>
+      <textarea id="input-textarea" style="display:none;"></textarea>
+      <input type="text" id="input-text" style="display:none;">
+      <p class="field-error" id="field-error">Bitte füllen Sie dieses Feld aus, damit wir starke Ideen für Sie entwickeln können.</p>
+      <div class="wizard-nav">
+        <button class="btn-ghost" id="btn-back" type="button">← Zurück</button>
+        <div class="spacer"></div>
+        <button class="btn-ghost" id="btn-skip" type="button" style="display:none;">Überspringen</button>
+        <button class="btn btn-primary" id="btn-next" type="button">Weiter</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================== TRANSITION ============================== -->
+  <section id="screen-transition" class="screen">
+    <div class="transition-card">
+      <p>Perfekt. Ich verbinde jetzt Zielgruppe, Problem, Angebot, Expertise und, falls vorhanden, Ihre Soul-DNA zu 5 außergewöhnlichen KI-Tool-Ideen.</p>
+      <button class="btn btn-primary" id="btn-generate" type="button">Meine 5 stärksten Ideen erstellen</button>
+      <div class="loading-dots" id="loading-dots"><span></span><span></span><span></span></div>
+    </div>
+  </section>
+
+  <!-- ============================== RESULTS ============================== -->
+  <section id="screen-results" class="screen">
+    <div class="results-header">
+      <p class="kicker">Ihre Soul-DNA KI-Tool-Ideen</p>
+      <h1 class="headline">5 Ideen, die wirklich zu Ihnen passen</h1>
+    </div>
+    <div id="ideas-container"></div>
+    <div class="restart-wrap">
+      <button class="btn btn-secondary" id="btn-restart" type="button">Neue Angaben machen</button>
+    </div>
+  </section>
+
+</div>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
